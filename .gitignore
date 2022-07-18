@@ -1,2 +1,5 @@
+__pycache__
 checkpoints
 data
+GVGAI_GYM
+wandb

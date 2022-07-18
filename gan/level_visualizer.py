@@ -1,16 +1,17 @@
 import os
 import gym_gvgai
 from PIL import Image, ImageDraw, ImageFont
+from .env import Env
 
 
 class LevelVisualizer:
-    def __init__(self, env, tile_size=16, padding=2, ascii_to_tile=None):
-        self.game = env
-        self.version = "v1"
+    def __init__(self, env: str, version: str, tile_size=16, padding=2):
+        self.version = version
+        self.game = Env(env, self.version)
         self.tile_size = tile_size
         self.dir = gym_gvgai.dir
-        self.ascii_mapping = ascii_to_tile
 
+        self.ascii_mapping = self.game.ascii_to_tile
         self.pad = padding
         self.game_description = self.read_gamefile()
         self.sprite_paths = self.sprite_mapping()
@@ -20,7 +21,7 @@ class LevelVisualizer:
 
     def read_gamefile(self):
         path = os.path.join(
-            self.dir, "envs", "games", f"{self.game}_{self.version}", f"{self.game}.txt"
+            self.dir, "envs", "games", f"{self.game.name}_{self.version}", f"{self.game.name}.txt"
         )
         with open(path, "r") as game:
             gamefile = game.readlines()
@@ -35,22 +36,6 @@ class LevelVisualizer:
             comment_idx = string.index("#")
             return string[:comment_idx]
         return string
-
-    def remove_excess_objs(self, level_str):
-        if "A" in level_str:
-            avatar_idx = level_str.index("A")
-            level_str = level_str.replace("A", ".")
-            level_str = level_str[:avatar_idx] + "A" + level_str[avatar_idx + 1 :]
-        # Philip: Add method to read singelton after file read, then loop through those characters here
-        if "+" in level_str:
-            avatar_idx = level_str.index("+")
-            level_str = level_str.replace("+", ".")
-            level_str = level_str[:avatar_idx] + "+" + level_str[avatar_idx + 1 :]
-        if "g" in level_str:
-            avatar_idx = level_str.index("g")
-            level_str = level_str.replace("g", ".")
-            level_str = level_str[:avatar_idx] + "g" + level_str[avatar_idx + 1 :]
-        return level_str
 
     def sprite_mapping(self):
         sprite_set = False
@@ -95,7 +80,8 @@ class LevelVisualizer:
     def get_sprite(self, name, alias=0):
         sprite = os.path.basename(self.sprite_paths[name])
         sprite_dir = os.path.dirname(self.sprite_paths[name])
-        sprite_dir = os.path.join(self.dir, "envs", "gvgai", "sprites", sprite_dir)
+        sprite_dir = os.path.join(
+            self.dir, "envs", "gvgai", "sprites", sprite_dir)
         try:
             sprite_filename = min(
                 [i for i in os.listdir(sprite_dir) if i.startswith(sprite)]
@@ -139,44 +125,43 @@ class LevelVisualizer:
         return ret
 
     def draw_level_ascii(self, ascii_level_str):
-        lvl_rows = []
-        tmp = ascii_level_str.split("\n")
-        h = len(tmp)
-        for i in range(h):
-            lvl_rows.append(tmp[i].split(","))
+        lvl_rows = ascii_level_str.split("\n")
         w = len(lvl_rows[0])
+        h = len(lvl_rows)
         ts = self.tile_size
         p = self.pad
-        lvl_img = Image.new("RGB", (w * ts + 2 * p, h * ts + 2 * p), (255, 255, 255))
+        lvl_img = Image.new(
+            "RGB", (w * ts + 2 * p, h * ts + 2 * p), (255, 255, 255))
 
-        if self.ascii_mapping is not None:
-            for y, r in enumerate(lvl_rows):
-                for x, c in enumerate(r):
-                    if " " in c:
-                        img = self._build_tile("@", c.split(" "))
-                    else:
-                        img = self.ascii_tiles[c]
-                    lvl_img.paste(
-                        img,
-                        (p + x * ts, p + y * ts, p + (x + 1) * ts, p + (y + 1) * ts),
-                    )
+        for y, r in enumerate(lvl_rows):
+            for x, c in enumerate(r):
+                if " " in c:
+                    img = self._build_tile("@", c.split(" "))
+                else:
+                    img = self.ascii_tiles[c]
+                lvl_img.paste(
+                    img,
+                    (p + x * ts, p + y * ts, p +
+                        (x + 1) * ts, p + (y + 1) * ts),
+                )
 
         return lvl_img
 
     def draw_level(self, level_str):
-        # level_str = self.remove_excess_objs(level_str)
         lvl_rows = level_str.split()
         w = len(lvl_rows[0])
         h = len(lvl_rows)
         ts = self.tile_size
         p = self.pad
-        lvl_img = Image.new("RGB", (w * ts + 2 * p, h * ts + 2 * p), (255, 255, 255))
+        lvl_img = Image.new(
+            "RGB", (w * ts + 2 * p, h * ts + 2 * p), (255, 255, 255))
 
         for y, r in enumerate(lvl_rows):
             for x, c in enumerate(r):
                 img = self.tiles[c]
                 lvl_img.paste(
-                    img, (p + x * ts, p + y * ts, p + (x + 1) * ts, p + (y + 1) * ts)
+                    img, (p + x * ts, p + y * ts, p +
+                          (x + 1) * ts, p + (y + 1) * ts)
                 )
 
         return lvl_img

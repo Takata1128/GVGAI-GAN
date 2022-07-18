@@ -1,10 +1,20 @@
+from __future__ import annotations
+from glob import glob
+import gym_gvgai
 import numpy as np
+import os
 
 GameDescription = {}
 GameDescription["aliens"] = {
     "ascii": [".", "0", "1", "2", "A"],
-    "mapping": [13, 3, 11, 12, 1],
-    "state_shape": (14, 12, 32),
+    'ascii_to_tile': {
+        "background": ["background"],
+        "base": ["background", "base"],
+        "portalSlow": ["background", "portalSlow"],
+        "portalFast": ["background", "portalFast"],
+        "avatar": ["background", "avatar"]
+    },
+    "state_shape": (5, 12, 32),
     "model_shape": [(3, 4), (6, 8), (12, 16), (12, 32)],
     "requirements": ["A"],
 }
@@ -23,21 +33,39 @@ GameDescription["zelda"] = {
         "monsterSlow": ["floor", "monsterSlow"],
         "wall": ["wall"],
     },
-    "mapping": [13, 0, 3, 4, 10, 11, 12, 7],
-    "state_shape": (14, 12, 16),
+    "state_shape": (8, 12, 16),
     "model_shape": [(3, 4), (6, 8), (12, 16)],
     "requirements": ["A", "g", "+"],
 }
 
+GameDescription["roguelike"] = {
+    "ascii": [".", "x", "s", "g", "r", "p", "h", "k", 'l', 'm', 'A', 'w'],
+    "ascii_to_tile": {
+        "": ["floor"],
+        "exit": ["floor", "exit"],
+        "weapon": ["floor", 'weapon'],
+        "gold": ["floor", 'gold'],
+        "spider": ["floor", "spider"],
+        "phantom": ["floor", "phantom"],
+        "health": ["floor", "health"],
+        "key": ["floor", "key"],
+        "lock": ["floor", "lock"],
+        "market": ["floor", "market"],
+        "avatar": ["floor", "avatar"],
+        'wall': ['wall']
+    },
+    "state_shape": (12, 21, 22),
+    "model_shape": [(5, 5), (10, 11), (21, 22)],
+    "requirements": ["x", 'A'],
+}
+
 
 class Env:
-    def __init__(self, name, length=500, wrapper_args=None):
+    def __init__(self, name, version='v1'):
         self.name = name
-        self.length = length
-        self.kwargs = wrapper_args
+        self.version = version
         try:
             self.ascii = GameDescription[name]["ascii"]
-            self.mapping = GameDescription[name]["mapping"]
             self.state_shape = GameDescription[name]["state_shape"]
             self.model_shape = GameDescription[name]["model_shape"]
             self.requirements = GameDescription[name]["requirements"]
@@ -47,7 +75,33 @@ class Env:
 
         self.map_level = np.vectorize(lambda x: self.ascii[x])
 
-    def create_levels(self, tensor):
+    def get_original_levels(self):
+        dir_path = os.path.join(
+            gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}")
+        file_pathes = glob(dir_path+"/*")
+        lvl_strs = []
+        for f_name in file_pathes:
+            if f_name == os.path.join(
+                    gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}", f"{self.name}.txt"):
+                continue
+            with open(f_name, 'r') as f:
+                content = f.readlines()
+                lvl_strs.append(content)
+        return lvl_strs
+
+    def level_strs_to_ndarray(self, strs: list[str]):
+        ret = np.zeros(
+            (len(self.ascii),
+             self.state_shape[1], self.state_shape[2]),
+        )
+        for i, s in enumerate(strs):
+            for j, c in enumerate(s):
+                if c == "\n":
+                    break
+                ret[self.ascii.index(c), i, j] = 1
+        return ret
+
+    def level_tensor_to_strs(self, tensor):
         lvl_array = tensor.argmax(dim=1).cpu().numpy()
         lvls = self.map_level(lvl_array).tolist()
         lvl_strs = ["\n".join(["".join(row) for row in lvl]) for lvl in lvls]
@@ -55,4 +109,4 @@ class Env:
 
     def pass_requirements(self, lvl_str):
         num_ok = sum(lvl_str.count(i) >= 1 for i in self.requirements)
-        return num_ok == 3
+        return num_ok == len(self.requirements)

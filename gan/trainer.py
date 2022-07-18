@@ -1,33 +1,24 @@
-from argparse import ArgumentParser
-import argparse
-from torchinfo import summary
-from utils import (
+import wandb
+from torch.utils.data import DataLoader
+from torchvision.utils import make_grid
+import os
+import torch
+import numpy as np
+from . import loss
+from .level_visualizer import LevelVisualizer
+from .dataset import LevelDataset
+from .config import TrainingConfig
+from .models import Generator, Discriminator
+from .utils import (
     tensor_to_level_str,
     check_playable,
     check_level_similarity,
     check_object_similarity,
     check_shape_similarity,
 )
-import wandb
-from dataset import LevelDataset
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision.utils import make_grid
-from tqdm import tqdm
-from level_visualizer import LevelVisualizer
-import os
-import torch
-import numpy as np
-import loss
-from config import TrainingConfig
-
-from models import Generator, Discriminator
-
-# from new_models import Generator, Discriminator
-from level_dataset_extend import prepare_dataset
 
 
-class GANTrainer:
+class Trainer:
     def __init__(self, config: TrainingConfig):
         self.config = config
 
@@ -39,18 +30,14 @@ class GANTrainer:
         # torch.backends.cudnn.deterministic = True
 
         if config.cuda:
-            self.device = torch.device("cuda" if torch.cuda.is_available else "cpu")
+            self.device = torch.device(
+                "cuda" if torch.cuda.is_available else "cpu")
             print("device : cuda")
         else:
             self.device = torch.device("cpu")
             print("device : cpu")
 
-        ### dataset files
-        self.dataset_files = os.listdir(
-            os.path.join(self.config.level_data_path, "train")
-        )
-
-        ### Dataset
+        # Dataset
         train_dataset = LevelDataset(
             config.level_data_path,
             config.env_name,
@@ -59,17 +46,21 @@ class GANTrainer:
             latent_size=config.latent_size,
         )
 
-        print("Training Dataset :", os.path.join(config.level_data_path, "train"))
+        # dataset files
+        self.dataset_files = os.listdir(train_dataset.image_dir)
 
-        ### DataLoader
+        print("Training Dataset :", train_dataset.image_dir)
+
+        # DataLoader
         self.train_loader = DataLoader(
             train_dataset, batch_size=config.train_batch_size, shuffle=True
         )
 
-        ### Level Visualizer
-        self.level_visualizer = LevelVisualizer(config.env_name)
+        # Level Visualizer
+        self.level_visualizer = LevelVisualizer(
+            config.env_name, config.env_version)
 
-        ### Network
+        # Network
         latent_shape = (config.latent_size,)
         self.generator = Generator(
             out_dim=config.input_shape[0],
@@ -89,7 +80,7 @@ class GANTrainer:
             is_conditional=config.is_conditional,
         ).to(self.device)
 
-        ### Optimizer
+        # Optimizer
         self.optimizer_g = torch.optim.Adam(
             self.generator.parameters(), lr=config.generator_lr
         )
@@ -103,7 +94,7 @@ class GANTrainer:
         max_playable_count = 0
         # summary(self.generator, (config.latent_size,), device=self.device)
         # summary(self.discriminator, config.input_shape, device=self.device)
-        with wandb.init(project="Zelda Level GAN", config=self.config.__dict__):
+        with wandb.init(project=f"{self.config.env_name} Level GAN", config=self.config.__dict__):
             step = 0
             latents_for_show = torch.randn(
                 9,
@@ -138,7 +129,7 @@ class GANTrainer:
                 torch.tensor(np.array(labels_for_eval)).int().to(self.device)
             )
 
-            ### model_save_path
+            # model_save_path
             model_save_path = os.path.join(
                 self.config.checkpoints_path,
                 self.config.name + "-" + wandb.run.name.split("-")[-1],
@@ -158,7 +149,8 @@ class GANTrainer:
                     Dx, DGz_d, discriminator_loss = self._discriminator_update(
                         real, fake, label
                     )
-                    generator_loss, div_loss = self._generator_update(fake, label)
+                    generator_loss, div_loss = self._generator_update(
+                        fake, label)
 
                     metrics["D(x)[Discriminator]"] = Dx
                     metrics["D(G(z))[Discriminator]"] = DGz_d
@@ -174,7 +166,8 @@ class GANTrainer:
 
                 if epoch % self.config.save_image_interval_epoch == 0:
                     p_level = self.generator(latents_for_show, labels_for_show)
-                    level_strs = tensor_to_level_str(self.config.env_name, p_level)
+                    level_strs = tensor_to_level_str(
+                        self.config.env_name, p_level)
                     p_level_img = [
                         torch.Tensor(
                             np.array(self.level_visualizer.draw_level(lvl)).transpose(
@@ -186,12 +179,14 @@ class GANTrainer:
                     ]
 
                     grid_level_img = make_grid(p_level_img, nrow=3, padding=0)
-                    images = wandb.Image(grid_level_img, caption="generated levels")
+                    images = wandb.Image(
+                        grid_level_img, caption="generated levels")
                     wandb.log({"Generated Levels": images})
 
                 if epoch % self.config.eval_playable_interval_epoch == 0:
                     p_level = self.generator(latents_for_eval, labels_for_eval)
-                    level_strs = tensor_to_level_str(self.config.env_name, p_level)
+                    level_strs = tensor_to_level_str(
+                        self.config.env_name, p_level)
                     playable_count = 0
                     for level_str in level_strs:
                         if check_playable(level_str):
@@ -218,7 +213,8 @@ class GANTrainer:
                     wandb.log({"Duplicate Ratio": duplicate_ratio})
 
                     if playable_count > max_playable_count:
-                        self._save_models(model_save_path, epoch, playable_count)
+                        self._save_models(
+                            model_save_path, epoch, playable_count)
                         max_playable_count = playable_count
 
                 if step == self.config.steps:
@@ -232,7 +228,8 @@ class GANTrainer:
         real_logits = self.discriminator(real_images, label).view(-1)
         fake_logits = self.discriminator(fake_images.detach(), label).view(-1)
         if self.config.adv_loss == "baseline":
-            loss_real, loss_fake, D_x, D_G_z = loss.d_loss(real_logits, fake_logits)
+            loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
+                real_logits, fake_logits, self.config.label_flip_prob)
         elif self.config.adv_loss == "hinge":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss_hinge(
                 real_logits, fake_logits
@@ -257,7 +254,8 @@ class GANTrainer:
         elif self.config.adv_loss == "hinge":
             generator_loss = loss.g_loss_hinge(fake_logits)
 
-        div_loss = loss.div_loss(fake_images, self.config.div_loss, config.lambda_div)
+        div_loss = loss.div_loss(
+            fake_images, self.config.div_loss, self.config.lambda_div)
         generator_loss += div_loss
 
         generator_loss.backward()
@@ -282,12 +280,14 @@ class GANTrainer:
         n_shape_level = 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
-                res_level += check_level_similarity(level_strs[i], level_strs[j])
+                res_level += check_level_similarity(
+                    level_strs[i], level_strs[j])
                 obj_tmp = check_object_similarity(level_strs[i], level_strs[j])
                 if obj_tmp is not None:
                     res_object += obj_tmp
                     n_object_level += 1
-                shape_tmp = check_shape_similarity(level_strs[i], level_strs[j])
+                shape_tmp = check_shape_similarity(
+                    level_strs[i], level_strs[j])
                 if shape_tmp is not None:
                     res_shape += shape_tmp
                     n_shape_level += 1
@@ -308,25 +308,20 @@ class GANTrainer:
         index = np.random.randint(0, len(self.dataset_files))
         file = self.dataset_files[index]
         with open(
-            os.path.join(self.config.level_data_path, "train", file),
+            os.path.join(self.config.level_data_path,
+                         self.config.env_name, "train", file),
             "w",
         ) as f:
             f.write(level_str)
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--name", type=str, default="none")
-    args = parser.parse_args()
-
-    for df in [16, 32, 64]:
-        config = TrainingConfig()
-        config.discriminator_filters = df
-        prepare_dataset(
-            seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
-        )
-        trainer = GANTrainer(config)
-        trainer.train()
+    # for df in [16, 32, 64]:
+    #     config = TrainingConfig()
+    #     config.discriminator_filters = df
+    #     prepare_dataset(
+    #         seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
+    #     )
+    #     trainer = GANTrainer(config)
+    #     trainer.train()
 
     # for i in range(len(lambdas)):
     #     for j in range(5):

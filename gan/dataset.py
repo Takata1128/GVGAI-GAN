@@ -6,7 +6,7 @@ import torch
 
 import numpy as np
 
-from env import Env
+from .env import Env
 
 
 class LevelDataset(Dataset):
@@ -18,7 +18,7 @@ class LevelDataset(Dataset):
         transform=transforms.ToTensor(),
         latent_size=100,
     ):
-        self.image_dir = os.path.join(root, datamode)
+        self.image_dir = os.path.join(root, env_name, datamode)
         self.image_paths = [
             os.path.join(self.image_dir, name) for name in os.listdir(self.image_dir)
         ]
@@ -45,7 +45,8 @@ class LevelDataset(Dataset):
         with open(img_path, "r") as f:
             datalist = f.readlines()
         ret = np.zeros(
-            (len(self.env.ascii), self.env.state_shape[1], self.env.state_shape[2]),
+            (len(self.env.ascii),
+             self.env.state_shape[1], self.env.state_shape[2]),
         )
 
         # label : onehot vector of counts of map tile object.

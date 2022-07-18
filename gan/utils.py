@@ -1,34 +1,6 @@
 import numpy as np
 from collections import deque
-
-GameDescription = {}
-GameDescription["aliens"] = {
-    "ascii": [".", "0", "1", "2", "A"],
-    "mapping": [13, 3, 11, 12, 1],
-    "state_shape": (14, 12, 32),
-    "model_shape": [(3, 4), (6, 8), (12, 16), (12, 32)],
-    "requirements": ["A"],
-}
-GameDescription["zelda"] = {
-    "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
-    "ascii_to_tile": {
-        "goal": ["floor", "goal"],
-        "": ["floor"],
-        "floor": ["floor"],
-        "key": ["floor", "key"],
-        "nokey": ["floor", "nokey"],
-        "withkey": ["floor", "withkey"],
-        "sword": ["floor", "sword"],
-        "monsterQuick": ["floor", "monsterQuick"],
-        "monsterNormal": ["floor", "monsterNormal"],
-        "monsterSlow": ["floor", "monsterSlow"],
-        "wall": ["wall"],
-    },
-    "mapping": [13, 0, 3, 4, 10, 11, 12, 7],
-    "state_shape": (14, 12, 16),
-    "model_shape": [(3, 4), (6, 8), (12, 16)],
-    "requirements": ["A", "g", "+"],
-}
+from .env import GameDescription
 
 
 def tensor_to_level_str(name, tensor):
