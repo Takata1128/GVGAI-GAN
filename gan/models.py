@@ -274,6 +274,9 @@ class Generator(nn.Module):
         x = self.output(x)
         return x
 
+    def summary(self, batch_size=64):
+        summary(self, (batch_size, self.z_size))
+
 
 class Discriminator(nn.Module):
     def __init__(
@@ -290,6 +293,8 @@ class Discriminator(nn.Module):
         self.is_self_attention = is_self_attention
         self.is_minibatch_std = is_minibatch_std
         self.is_spectral_norm = is_spectral_norm
+        self.input_ch = in_ch
+        self.input_shape = shapes[0]
 
         self.preprocess = nn.Sequential(
             nn.Conv2d(in_ch, filters, 3, stride=1,
@@ -325,18 +330,5 @@ class Discriminator(nn.Module):
         out = self.output(x)
         return out
 
-
-if __name__ == "__main__":
-    model_shapes = [(3, 4), (6, 8), (12, 16)]
-    generator = Generator(8, model_shapes, (128,)).to("cuda:0")
-    discriminator = Discriminator(
-        8, model_shapes[::-1], filters=32).to("cuda:0")
-    batch_size = 64
-    summary(
-        generator,
-        (
-            batch_size,
-            128,
-        ),
-    )
-    summary(discriminator, (batch_size, 8, 12, 16))
+    def summary(self, batch_size=64):
+        summary(self, (batch_size, self.input_ch, *self.input_shape))
