@@ -124,7 +124,7 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, clone_size=100, game_na
             img = visualizer.draw_level(lvl_str_re[0])
             img.save(os.path.dirname(
                 __file__) + f"/data/level/{game_name}/"+f"level_{i}_{j}.jpg")
-            for k in range(0, 250):
+            for k in range(0, clone_size):
                 lvl_str_re = visualizer.game.level_tensor_to_strs(st)
                 if extend_data:
                     s = make_another[game_name](lvl_str_re[0])

@@ -11,8 +11,8 @@ class TrainingConfig:
     name: str = "none"
 
     # environment name
-    env_name: str = "roguelike"
-    env_version: str = 'v0'
+    env_name: str = "zelda"
+    env_version: str = 'v1'
 
     # data path
     level_data_path: str = (
@@ -25,7 +25,7 @@ class TrainingConfig:
     # model define
     latent_size: int = 128  # latent dims for generation
     generator_filters: int = 128
-    discriminator_filters: int = 8
+    discriminator_filters: int = 16
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
     is_self_attention_g: bool = True
@@ -36,7 +36,7 @@ class TrainingConfig:
 
     # learning parameters
     adv_loss: str = "baseline"  # ["baseline","hinge"]
-    div_loss: str = "none"  # ["l1","l2","none"]
+    div_loss: str = "l1"  # ["l1","l2","none"]
     lambda_div = 100.0
 
     generator_lr: float = 0.0001
@@ -45,10 +45,10 @@ class TrainingConfig:
     steps: int = 50000  # training steps
     train_batch_size: int = 64  # training batch size
     test_batch_size: int = 5  # test batch size
-    label_flip_prob: float = 0.2  # prob of flipping real label
-    save_image_interval_epoch: int = 10  # save images interval
-    save_model_interval_epoch: int = 500  # save models interval
-    eval_playable_interval_epoch: int = 10  # check playable interval
+    label_flip_prob: float = 0.0  # prob of flipping real label
+    save_image_interval_epoch: int = 100  # save images interval
+    save_model_interval_epoch: int = 5000  # save models interval
+    eval_playable_interval_epoch: int = 100  # check playable interval
 
     # others parameters
     seed: int = 0  # random seed
@@ -56,8 +56,8 @@ class TrainingConfig:
 
     eval_playable_counts = 300  # number of z to check playable.
     clone_data = False
-    clone_size = 10
-    flip_data = True
+    clone_size = 100
+    flip_data = False
     bootstrap: bool = True
 
     def set_env(self):

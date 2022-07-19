@@ -39,7 +39,7 @@ GameDescription["zelda"] = {
 }
 
 GameDescription["roguelike"] = {
-    "ascii": [".", "x", "s", "g", "r", "p", "h", "k", 'l', 'm', 'A', 'w'],
+    "ascii": [".", 'w', "x", "s", "g", "r", "p", "h", "k", 'l', 'm', 'A'],
     "ascii_to_tile": {
         "": ["floor"],
         "exit": ["floor", "exit"],
