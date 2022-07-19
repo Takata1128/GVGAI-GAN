@@ -11,7 +11,7 @@ if __name__ == "__main__":
     # config.env_name = 'aliens'
     config.set_env()
     prepare_dataset(
-        seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, game_name=config.env_name, version=config.env_version
+        seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, clone_size=config.clone_size, game_name=config.env_name, version=config.env_version
     )
     trainer = Trainer(config)
     trainer.train()

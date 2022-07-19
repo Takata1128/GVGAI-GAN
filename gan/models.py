@@ -46,7 +46,8 @@ class SpectralNorm(nn.Module):
 
         height = w.data.shape[0]
         for _ in range(self.power_iterations):
-            v.data = l2normalize(torch.mv(torch.t(w.view(height, -1).data), u.data))
+            v.data = l2normalize(
+                torch.mv(torch.t(w.view(height, -1).data), u.data))
             u.data = l2normalize(torch.mv(w.view(height, -1).data, v.data))
 
         # sigma = torch.dot(u.data, torch.mv(w.view(height,-1).data, v.data))
@@ -128,7 +129,8 @@ class Self_Attn(nn.Module):
         """
 
         b, c, w, h = x.shape
-        proj_query = self.query_conv(x).view(b, -1, w * h).permute(0, 2, 1)  # (B,WH,C)
+        proj_query = self.query_conv(x).view(
+            b, -1, w * h).permute(0, 2, 1)  # (B,WH,C)
         proj_key = self.key_conv(x).view(b, -1, w * h)
         energy = torch.bmm(proj_query, proj_key)  # mat mul by batch
         attention = self.softmax(energy)  # (B,WH,WH)
@@ -176,7 +178,8 @@ class GenBlock(nn.Module):
         self.is_conditional = is_conditional
 
         self.resize = Resize(shape)
-        self.conv = nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, bias=False)
+        self.conv = nn.Conv2d(
+            in_ch, out_ch, kernel_size=3, padding=1, bias=False)
         self.act = nn.LeakyReLU(True)
         self.bn = nn.BatchNorm2d(out_ch)
 
@@ -208,7 +211,8 @@ class DisBlock(nn.Module):
         self.conv = nn.Conv2d(in_ch, out_ch, 4, stride=2, padding=1)
         self.act = nn.LeakyReLU(True)
         if is_conditional:
-            self.attn = Conditional_Self_Attn((out_ch, *shape), label_channel=8)
+            self.attn = Conditional_Self_Attn(
+                (out_ch, *shape), label_channel=8)
         elif is_self_attention:
             self.attn = Self_Attn(out_ch)
         else:
@@ -288,7 +292,8 @@ class Discriminator(nn.Module):
         self.is_spectral_norm = is_spectral_norm
 
         self.preprocess = nn.Sequential(
-            nn.Conv2d(in_ch, filters, 3, stride=1, padding=1), nn.LeakyReLU(True)
+            nn.Conv2d(in_ch, filters, 3, stride=1,
+                      padding=1), nn.LeakyReLU(True)
         )
 
         self.blocks = nn.ModuleList()
@@ -324,7 +329,8 @@ class Discriminator(nn.Module):
 if __name__ == "__main__":
     model_shapes = [(3, 4), (6, 8), (12, 16)]
     generator = Generator(8, model_shapes, (128,)).to("cuda:0")
-    discriminator = Discriminator(8, model_shapes[::-1], filters=32).to("cuda:0")
+    discriminator = Discriminator(
+        8, model_shapes[::-1], filters=32).to("cuda:0")
     batch_size = 64
     summary(
         generator,
