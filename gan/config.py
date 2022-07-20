@@ -22,9 +22,9 @@ class TrainingConfig:
     )  # save model path
 
     # model define
-    latent_size: int = 128  # latent dims for generation
+    latent_size: int = 64  # latent dims for generation
     generator_filters: int = 128
-    discriminator_filters: int = 16
+    discriminator_filters: int = 8
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
     is_self_attention_g: bool = True
@@ -36,7 +36,7 @@ class TrainingConfig:
     # learning parameters
     adv_loss: str = "baseline"  # ["baseline","hinge"]
     div_loss: str = "l1"  # ["l1","l2","none"]
-    lambda_div = 10.0
+    lambda_div = 50.0
 
     generator_lr: float = 0.0001
     discriminator_lr: float = 0.0001

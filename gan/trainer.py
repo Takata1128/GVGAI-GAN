@@ -48,6 +48,7 @@ class Trainer:
 
         # dataset files
         self.dataset_files = os.listdir(train_dataset.image_dir)
+        self.index = 0
 
         print("Training Dataset :", train_dataset.image_dir)
 
@@ -79,6 +80,10 @@ class Trainer:
             is_spectral_norm=config.is_spectral_norm,
             is_conditional=config.is_conditional,
         ).to(self.device)
+
+        # check model summary
+        self.generator.summary(batch_size=self.config.train_batch_size)
+        self.discriminator.summary(batch_size=self.config.train_batch_size)
 
         # Optimizer
         self.optimizer_g = torch.optim.Adam(
@@ -305,8 +310,7 @@ class Trainer:
         )
 
     def _level_expand(self, level_str):
-        index = np.random.randint(0, len(self.dataset_files))
-        file = self.dataset_files[index]
+        file = self.dataset_files[self.index]
         with open(
             os.path.join(self.config.level_data_path,
                          self.config.env_name, "train", file),
