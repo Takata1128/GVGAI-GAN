@@ -1,3 +1,4 @@
+from black import out
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -182,6 +183,7 @@ class GenBlock(nn.Module):
             in_ch, out_ch, kernel_size=3, padding=1, bias=False)
         self.act = nn.LeakyReLU(True)
         self.bn = nn.BatchNorm2d(out_ch)
+        self.bn2 = nn.BatchNorm2d(out_ch)
 
         if is_conditional:
             self.attn = Conditional_Self_Attn((out_ch, *shape), 8)
@@ -199,6 +201,8 @@ class GenBlock(nn.Module):
             x = self.attn(x, label)
         else:
             x = self.attn(x)
+        x = self.act(x)
+        x = self.bn2(x)
         return x
 
 
@@ -225,6 +229,7 @@ class DisBlock(nn.Module):
             x = self.attn(x, label)
         else:
             x = self.attn(x)
+        x = self.act(x)
         return x
 
 

@@ -35,14 +35,14 @@ class TrainingConfig:
 
     # learning parameters
     adv_loss: str = "baseline"  # ["baseline","hinge"]
-    div_loss: str = "l1"  # ["l1","l2","none"]
-    lambda_div = 100.0
+    div_loss: str = "l2"  # ["l1","l2","none"]
+    lambda_div = 10.0
     div_loss_threshold_playability = 0.3
 
     generator_lr: float = 0.0001
     discriminator_lr: float = 0.0001
     epochs: int = 1000000  # training epochs
-    steps: int = 50000*4  # training steps
+    steps: int = 50000  # training steps
     train_batch_size: int = 64  # training batch size
     test_batch_size: int = 5  # test batch size
     label_flip_prob: float = 0.0  # prob of flipping real label
