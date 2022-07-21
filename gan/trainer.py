@@ -1,8 +1,10 @@
+from __future__ import annotations
 import wandb
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 import os
 import torch
+import operator
 import numpy as np
 from . import loss
 from .level_visualizer import LevelVisualizer
@@ -48,7 +50,6 @@ class Trainer:
 
         # dataset files
         self.dataset_files = os.listdir(train_dataset.image_dir)
-        self.index = 0
 
         print("Training Dataset :", train_dataset.image_dir)
 
@@ -92,6 +93,8 @@ class Trainer:
         self.optimizer_d = torch.optim.Adam(
             self.discriminator.parameters(), lr=config.discriminator_lr
         )
+
+        self.playability = 0
 
     def train(self):
         wandb.login()
@@ -192,12 +195,13 @@ class Trainer:
                     p_level = self.generator(latents_for_eval, labels_for_eval)
                     level_strs = tensor_to_level_str(
                         self.config.env_name, p_level)
-                    playable_count = 0
+                    playable_levels = []
                     for level_str in level_strs:
                         if check_playable(level_str):
-                            playable_count += 1
-                            if self.config.bootstrap:
-                                self._level_expand(level_str)
+                            playable_levels.append(level_str)
+
+                    if self.config.bootstrap and len(playable_levels) > 1:
+                        self._bootstrap(playable_levels)
 
                     (
                         level_similarity,
@@ -208,7 +212,7 @@ class Trainer:
 
                     wandb.log(
                         {
-                            "Playable Ratio": playable_count
+                            "Playable Ratio": len(playable_levels)
                             / self.config.eval_playable_counts
                         }
                     )
@@ -217,13 +221,59 @@ class Trainer:
                     wandb.log({"Shape Similarity Ratio": shape_similarity})
                     wandb.log({"Duplicate Ratio": duplicate_ratio})
 
-                    if playable_count > max_playable_count:
+                    if len(playable_levels) > max_playable_count:
                         self._save_models(
-                            model_save_path, epoch, playable_count)
-                        max_playable_count = playable_count
+                            model_save_path, epoch, len(playable_levels))
+                        max_playable_count = len(playable_levels)
+                        self.playability = max_playable_count / self.config.eval_playable_counts
 
                 if step == self.config.steps:
                     break
+
+    # 生成データによる学習データ拡張 他との類似度が低いものを高いものと入れ替える
+    def _bootstrap(self, playable_levels: list[str]):
+        for i in range(len(playable_levels)):
+            key = 0
+            for j in range(len(playable_levels)):
+                if i == j:
+                    continue
+                key += check_level_similarity(
+                    playable_levels[i], playable_levels[j])
+            playable_levels[i] = [playable_levels[i], key]
+
+        playable_levels.sort(key=operator.itemgetter(1))
+
+        exchange_count = min(
+            self.config.dataset_max_change_count, len(playable_levels))
+
+        change_levels = []
+        for file in self.dataset_files:
+            with open(
+                os.path.join(self.config.level_data_path,
+                             self.config.env_name, "train", file), mode="r"
+            ) as f:
+                lvl_str = f.read()
+            change_levels.append([file, lvl_str])
+
+        for i in range(len(change_levels)):
+            key = 0
+            for j in range(len(change_levels)):
+                if i == j:
+                    continue
+                key += check_level_similarity(
+                    change_levels[i][1], change_levels[j][1])
+            change_levels[i].append(key)
+
+        change_levels.sort(
+            key=operator.itemgetter(1), reverse=True)
+
+        for i in range(exchange_count):
+            file = change_levels[i][0]
+            with open(
+                os.path.join(self.config.level_data_path,
+                             self.config.env_name, "train", file), mode="w"
+            ) as f:
+                f.write(playable_levels[i][0])
 
     def _discriminator_update(self, real_images, fake_images, label=None):
         """
@@ -261,7 +311,8 @@ class Trainer:
 
         div_loss = loss.div_loss(
             fake_images, self.config.div_loss, self.config.lambda_div)
-        generator_loss += div_loss
+        if self.playability > self.config.div_loss_threshold_playability:
+            generator_loss += div_loss
 
         generator_loss.backward()
         self.optimizer_g.step()
@@ -305,50 +356,15 @@ class Trainer:
         return (
             res_level / n_level,
             res_object / n_object_level if n_object_level > 0 else None,
-            res_shape / n_shape_level if n_object_level > 0 else None,
+            res_shape / n_shape_level if n_shape_level > 0 else None,
             res_duplicate / n_level,
         )
 
-    def _level_expand(self, level_str):
-        file = self.dataset_files[self.index]
+    def _level_expand(self, level_str, index):
+        file = self.dataset_files[index]
         with open(
             os.path.join(self.config.level_data_path,
                          self.config.env_name, "train", file),
             "w",
         ) as f:
             f.write(level_str)
-
-    # for df in [16, 32, 64]:
-    #     config = TrainingConfig()
-    #     config.discriminator_filters = df
-    #     prepare_dataset(
-    #         seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
-    #     )
-    #     trainer = GANTrainer(config)
-    #     trainer.train()
-
-    # for i in range(len(lambdas)):
-    #     for j in range(5):
-    #         config = TrainingConfig()
-    #         config.name = "L1-div-" + str(lambdas[i])
-    #         config.lambda_div = lambdas[i]
-    #         config.div_loss = "l1"
-    #         config.seed = j
-    #         prepare_dataset(
-    #             seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
-    #         )
-    #         trainer = GANTrainer(config)
-    #         trainer.train()
-
-    # for i in range(len(lambdas)):
-    #     for j in range(5):
-    #         config = TrainingConfig()
-    #         config.name = "L2-div-" + str(lambdas[i])
-    #         config.lambda_div = lambdas[i]
-    #         config.div_loss = "l2"
-    #         config.seed = j
-    #         prepare_dataset(
-    #             seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
-    #         )
-    #         trainer = GANTrainer(config)
-    #         trainer.train()

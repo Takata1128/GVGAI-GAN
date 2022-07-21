@@ -271,6 +271,7 @@ class Generator(nn.Module):
         x = x.view(-1, d, h, w)
         for b in self.blocks:
             x = b(x, label)
+            hidden = x
         x = self.output(x)
         return x
 
@@ -313,10 +314,10 @@ class Discriminator(nn.Module):
 
         if self.is_minibatch_std:
             self.minibatch_std = MiniBatchStd()
-        # self.postprocess = nn.AdaptiveAvgPool2d(1)
-        self.postprocess = nn.Sequential(
-            nn.Conv2d(in_ch, in_ch, 3, 1, 1), nn.AdaptiveAvgPool2d(1)
-        )
+        self.postprocess = nn.AdaptiveAvgPool2d(1)
+        # self.postprocess = nn.Sequential(
+        #     nn.Conv2d(in_ch, in_ch, 3, 1, 1), nn.AdaptiveAvgPool2d(1)
+        # )
         self.output = nn.Linear(in_ch + int(is_minibatch_std), 1)
 
     def forward(self, x, label=None):
