@@ -24,7 +24,7 @@ class TrainingConfig:
     # model define
     latent_size: int = 64  # latent dims for generation
     generator_filters: int = 128
-    discriminator_filters: int = 8
+    discriminator_filters: int = 16
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
     is_self_attention_g: bool = True

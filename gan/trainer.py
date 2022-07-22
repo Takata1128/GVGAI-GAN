@@ -66,7 +66,8 @@ class Trainer:
         # Network
         latent_shape = (config.latent_size,)
         self.generator = Generator(
-            out_dim=config.input_shape[0],
+            object_channel=7,
+            shape_channel=2,
             shapes=config.model_shapes,
             z_shape=latent_shape,
             filters=config.generator_filters,
