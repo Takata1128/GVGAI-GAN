@@ -264,10 +264,9 @@ class Generator(nn.Module):
             in_ch = out_ch + 8 if is_conditional else out_ch
 
         out_ch = out_dim
-        self.output = nn.Sequential(
+        self.outconv = nn.Sequential(
             Resize(shapes[-1]),
             nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=True),
-            nn.Softmax2d(),
         )
 
     def forward(self, z, label=None):
@@ -276,8 +275,7 @@ class Generator(nn.Module):
         x = x.view(-1, d, h, w)
         for b in self.blocks:
             x = b(x, label)
-            hidden = x
-        x = self.output(x)
+        x = self.outconv(x)
         return x
 
     def summary(self, batch_size=64):

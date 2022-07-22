@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ensurepip import bootstrap
 import wandb
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
@@ -152,13 +153,13 @@ class Trainer:
                         real.to(self.device).float(),
                         label.to(self.device).int(),
                     )
-                    fake = self.generator(latent, label)
+                    fake_logit = self.generator(latent, label)
 
                     Dx, DGz_d, discriminator_loss = self._discriminator_update(
-                        real, fake, label
+                        real, fake_logit, label
                     )
                     generator_loss, div_loss = self._generator_update(
-                        fake, label)
+                        fake_logit, label)
 
                     metrics["D(x)[Discriminator]"] = Dx
                     metrics["D(G(z))[Discriminator]"] = DGz_d
@@ -173,7 +174,8 @@ class Trainer:
                         break
 
                 if epoch % self.config.save_image_interval_epoch == 0:
-                    p_level = self.generator(latents_for_show, labels_for_show)
+                    p_level = torch.nn.Softmax2d()(
+                        self.generator(latents_for_show, labels_for_show))
                     level_strs = tensor_to_level_str(
                         self.config.env_name, p_level)
                     p_level_img = [
@@ -192,7 +194,8 @@ class Trainer:
                     wandb.log({"Generated Levels": images})
 
                 if epoch % self.config.eval_playable_interval_epoch == 0:
-                    p_level = self.generator(latents_for_eval, labels_for_eval)
+                    p_level = torch.nn.Softmax2d()(
+                        self.generator(latents_for_eval, labels_for_eval))
                     level_strs = tensor_to_level_str(
                         self.config.env_name, p_level)
                     playable_levels = []
@@ -232,48 +235,54 @@ class Trainer:
 
     # 生成データによる学習データ拡張 他との類似度が低いものを高いものと入れ替える
     def _bootstrap(self, playable_levels: list[str]):
-        for i in range(len(playable_levels)):
-            key = 0
-            for j in range(len(playable_levels)):
-                if i == j:
-                    continue
-                key += check_level_similarity(
-                    playable_levels[i], playable_levels[j])
-            playable_levels[i] = [playable_levels[i], key]
+        if self.config.bootstrap == "random":
+            for level in playable_levels:
+                self._level_expand(level)
+        elif self.config.bootstrap == "smart":
+            for i in range(len(playable_levels)):
+                key = 0
+                for j in range(len(playable_levels)):
+                    if i == j:
+                        continue
+                    key += check_level_similarity(
+                        playable_levels[i], playable_levels[j])
+                playable_levels[i] = [playable_levels[i], key]
 
-        playable_levels.sort(key=operator.itemgetter(1))
+            playable_levels.sort(key=operator.itemgetter(1))
 
-        exchange_count = min(
-            self.config.dataset_max_change_count, len(playable_levels))
+            exchange_count = min(
+                self.config.dataset_max_change_count, len(playable_levels))
 
-        change_levels = []
-        for file in self.dataset_files:
-            with open(
-                os.path.join(self.config.level_data_path,
-                             self.config.env_name, "train", file), mode="r"
-            ) as f:
-                lvl_str = f.read()
-            change_levels.append([file, lvl_str])
+            change_levels = []
+            for file in self.dataset_files:
+                with open(
+                    os.path.join(self.config.level_data_path,
+                                 self.config.env_name, "train", file), mode="r"
+                ) as f:
+                    lvl_str = f.read()
+                change_levels.append([file, lvl_str])
 
-        for i in range(len(change_levels)):
-            key = 0
-            for j in range(len(change_levels)):
-                if i == j:
-                    continue
-                key += check_level_similarity(
-                    change_levels[i][1], change_levels[j][1])
-            change_levels[i].append(key)
+            for i in range(len(change_levels)):
+                key = 0
+                for j in range(len(change_levels)):
+                    if i == j:
+                        continue
+                    key += check_level_similarity(
+                        change_levels[i][1], change_levels[j][1])
+                change_levels[i].append(key)
 
-        change_levels.sort(
-            key=operator.itemgetter(1), reverse=True)
+            change_levels.sort(
+                key=operator.itemgetter(1), reverse=True)
 
-        for i in range(exchange_count):
-            file = change_levels[i][0]
-            with open(
-                os.path.join(self.config.level_data_path,
-                             self.config.env_name, "train", file), mode="w"
-            ) as f:
-                f.write(playable_levels[i][0])
+            for i in range(exchange_count):
+                file = change_levels[i][0]
+                with open(
+                    os.path.join(self.config.level_data_path,
+                                 self.config.env_name, "train", file), mode="w"
+                ) as f:
+                    f.write(playable_levels[i][0])
+        else:
+            pass
 
     def _discriminator_update(self, real_images, fake_images, label=None):
         """
@@ -281,7 +290,8 @@ class Trainer:
         """
         self.discriminator.zero_grad()
         real_logits = self.discriminator(real_images, label).view(-1)
-        fake_logits = self.discriminator(fake_images.detach(), label).view(-1)
+        fake_logits = self.discriminator(
+            torch.nn.Softmax2d()(fake_images).detach(), label).view(-1)
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
                 real_logits, fake_logits, self.config.label_flip_prob)
@@ -298,19 +308,20 @@ class Trainer:
 
         return D_x, D_G_z, discriminator_loss.item()
 
-    def _generator_update(self, fake_images, label=None):
+    def _generator_update(self, fake_images_logit, label=None):
         """
         update generator: maximize log(D(G(z)))
         """
         self.generator.zero_grad()
-        fake_logits = self.discriminator(fake_images, label).view(-1)
+        fake_logits = self.discriminator(
+            torch.nn.Softmax2d()(fake_images_logit), label).view(-1)
         if self.config.adv_loss == "baseline":
             generator_loss = loss.g_loss(fake_logits)
         elif self.config.adv_loss == "hinge":
             generator_loss = loss.g_loss_hinge(fake_logits)
 
         div_loss = loss.div_loss(
-            fake_images, self.config.div_loss, self.config.lambda_div)
+            torch.nn.Softmax2d()(fake_images_logit), self.config.div_loss, self.config.lambda_div)
         if self.playability > self.config.div_loss_threshold_playability:
             generator_loss += div_loss
 
@@ -360,7 +371,8 @@ class Trainer:
             res_duplicate / n_level,
         )
 
-    def _level_expand(self, level_str, index):
+    def _level_expand(self, level_str):
+        index = np.random.randint(0, len(self.dataset_files))
         file = self.dataset_files[index]
         with open(
             os.path.join(self.config.level_data_path,

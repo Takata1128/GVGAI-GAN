@@ -115,11 +115,11 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
         state_numpy = visualizer.game.level_strs_to_ndarray(lvl_str)
         state_tensor = torch.unsqueeze(torch.Tensor(state_numpy), 0)
         states.append(state_tensor)
-        lvl_str_re = visualizer.game.level_tensor_to_strs(state_tensor)
-        with open(
-            train_dir_path + f"{str(i)}.base", mode="w"
-        ) as f:
-            f.write(lvl_str_re[0])
+        # lvl_str_re = visualizer.game.level_tensor_to_strs(state_tensor)
+        # with open(
+        #     train_dir_path + f"{str(i)}.base", mode="w"
+        # ) as f:
+        #     f.write(lvl_str_re[0])
         if flip:
             states.append(torch.flip(state_tensor, [2]))
             states.append(torch.flip(state_tensor, [3]))
