@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from functools import reduce
 from operator import mul
@@ -181,7 +182,6 @@ class GenBlock(nn.Module):
             in_ch, out_ch, kernel_size=3, padding=1, bias=False)
         self.act = nn.LeakyReLU(True)
         self.bn = nn.BatchNorm2d(out_ch)
-        self.bn2 = nn.BatchNorm2d(out_ch)
 
         if is_conditional:
             self.attn = Conditional_Self_Attn((out_ch, *shape), 8)
@@ -199,8 +199,6 @@ class GenBlock(nn.Module):
             x = self.attn(x, label)
         else:
             x = self.attn(x)
-        x = self.act(x)
-        x = self.bn2(x)
         return x
 
 
@@ -212,7 +210,6 @@ class DisBlock(nn.Module):
 
         self.conv = nn.Conv2d(in_ch, out_ch, 4, stride=2, padding=1)
         self.act = nn.LeakyReLU(True)
-        # self.bn = nn.BatchNorm2d(out_ch)
         if is_conditional:
             self.attn = Conditional_Self_Attn(
                 (out_ch, *shape), label_channel=8)
@@ -228,12 +225,35 @@ class DisBlock(nn.Module):
             x = self.attn(x, label)
         else:
             x = self.attn(x)
-        # x = self.bn(x)
-        x = self.act(x)
         return x
 
 
 class Generator(nn.Module):
+    def __init__(self,
+                 shape_channel,
+                 object_channel,
+                 shapes,
+                 z_shape,
+                 filters=256,
+                 is_self_attention=True,
+                 is_conditional=False,):
+        super(Generator, self).__init__()
+        self.z_size = z_shape[0]
+        self.shape_g = ShapeGenerator(
+            shape_channel, shapes, z_shape, filters, is_self_attention, is_conditional)
+        self.objects_g = ObjectGenerator(
+            object_channel, shapes, z_shape, filters, is_self_attention, is_conditional)
+
+    def forward(self, x, label=None):
+        shape = self.shape_g(x)
+        object = self.objects_g(x, shape.detach())
+        return torch.cat((shape, object[:, 1:]), dim=1)
+
+    def summary(self, batch_size=64):
+        summary(self, (batch_size, self.z_size))
+
+
+class ShapeGenerator(nn.Module):
     def __init__(
         self,
         out_dim,
@@ -243,7 +263,7 @@ class Generator(nn.Module):
         is_self_attention=True,
         is_conditional=False,
     ):
-        super(Generator, self).__init__()
+        super(ShapeGenerator, self).__init__()
         self.z_size = z_shape[0]
         self.is_self_attention = is_self_attention
 
@@ -264,10 +284,10 @@ class Generator(nn.Module):
             in_ch = out_ch + 8 if is_conditional else out_ch
 
         out_ch = out_dim
-        self.outconv = nn.Sequential(
+        self.output = nn.Sequential(
             Resize(shapes[-1]),
             nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=True),
-            Self_Attn(out_ch)  # additional
+            # nn.Softmax2d(),
         )
 
     def forward(self, z, label=None):
@@ -276,11 +296,61 @@ class Generator(nn.Module):
         x = x.view(-1, d, h, w)
         for b in self.blocks:
             x = b(x, label)
-        x = self.outconv(x)
+        x = self.output(x)
         return x
 
-    def summary(self, batch_size=64):
-        summary(self, (batch_size, self.z_size))
+
+class ObjectGenerator(nn.Module):
+    def __init__(
+        self,
+        out_dim,
+        shapes,
+        z_shape,
+        filters=256,
+        is_self_attention=True,
+        is_conditional=False,
+    ):
+        super(ObjectGenerator, self).__init__()
+        self.z_size = z_shape[0]
+        self.is_self_attention = is_self_attention
+
+        self.init_shape = (filters, *shapes[0])
+        self.preprocess = nn.Sequential(
+            nn.Linear(self.z_size, reduce(mul, self.init_shape), bias=False),
+            nn.LeakyReLU(True),
+        )
+
+        self.blocks = nn.ModuleList()
+        in_ch = filters
+        out_ch = filters
+        for s in shapes[:-1]:
+            out_ch = out_ch // 2
+            self.blocks.append(
+                GenBlock(in_ch, out_ch, s, is_self_attention, is_conditional)
+            )
+            in_ch = out_ch + 8 if is_conditional else out_ch
+
+        out_ch = out_dim
+        self.output = nn.Sequential(
+            Resize(shapes[-1]),
+        )
+
+        self.output2 = nn.Sequential(
+            Self_Attn(in_ch+2),
+            nn.Conv2d(in_ch+2, out_ch, 3, padding=1, bias=True),
+            # nn.Softmax2d(),
+        )
+
+    def forward(self, z, shape, label=None):
+        x = self.preprocess(z)
+        d, h, w = self.init_shape
+        x = x.view(-1, d, h, w)
+        for b in self.blocks:
+            x = b(x, label)
+        x = self.output(x)
+        x = torch.cat([x, shape], dim=1)
+        x = self.output2(x)
+        return x
 
 
 class Discriminator(nn.Module):
@@ -302,7 +372,6 @@ class Discriminator(nn.Module):
         self.input_shape = shapes[0]
 
         self.preprocess = nn.Sequential(
-            Self_Attn(in_ch),  # additional
             nn.Conv2d(in_ch, filters, 3, stride=1,
                       padding=1), nn.LeakyReLU(True)
         )
@@ -320,9 +389,6 @@ class Discriminator(nn.Module):
         if self.is_minibatch_std:
             self.minibatch_std = MiniBatchStd()
         self.postprocess = nn.AdaptiveAvgPool2d(1)
-        # self.postprocess = nn.Sequential(
-        #     nn.Conv2d(in_ch, in_ch, 3, 1, 1), nn.AdaptiveAvgPool2d(1)
-        # )
         self.output = nn.Linear(in_ch + int(is_minibatch_std), 1)
 
     def forward(self, x, label=None):

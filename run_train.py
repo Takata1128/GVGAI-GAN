@@ -8,10 +8,10 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, default="none")
     args = parser.parse_args()
     config = TrainingConfig()
-    # config.env_name = 'aliens'
     config.set_env()
-    prepare_dataset(
-        seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-    )
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
     trainer = Trainer(config)
     trainer.train()

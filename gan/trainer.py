@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ensurepip import bootstrap
 import wandb
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
@@ -11,7 +10,6 @@ from . import loss
 from .level_visualizer import LevelVisualizer
 from .dataset import LevelDataset
 from .config import TrainingConfig
-from .models import Generator, Discriminator
 from .utils import (
     tensor_to_level_str,
     check_playable,
@@ -44,7 +42,7 @@ class Trainer:
         train_dataset = LevelDataset(
             config.level_data_path,
             config.env_name,
-            datamode="train",
+            datamode=self.config.dataset_type,
             transform=None,
             latent_size=config.latent_size,
         )
@@ -64,25 +62,70 @@ class Trainer:
             config.env_name, config.env_version)
 
         # Network
-        latent_shape = (config.latent_size,)
-        self.generator = Generator(
-            object_channel=7,
-            shape_channel=2,
-            shapes=config.model_shapes,
-            z_shape=latent_shape,
-            filters=config.generator_filters,
-            is_self_attention=config.is_self_attention_g,
-            is_conditional=config.is_conditional,
-        ).to(self.device)
-        self.discriminator = Discriminator(
-            in_ch=config.input_shape[0],
-            shapes=config.model_shapes[::-1],
-            filters=config.discriminator_filters,
-            is_self_attention=config.is_self_attention_d,
-            is_minibatch_std=config.is_minibatch_std,
-            is_spectral_norm=config.is_spectral_norm,
-            is_conditional=config.is_conditional,
-        ).to(self.device)
+        self._build_model()
+
+        self.playability = 0
+
+        self.data_index = 0
+
+    def _build_model(self):
+        latent_shape = (self.config.latent_size,)
+
+        if self.config.model_type == "branch":
+            from .branch_models import Generator
+            self.generator = Generator(
+                shape_channel=2,
+                object_channel=7,
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                is_self_attention=self.config.is_self_attention_g,
+                is_conditional=self.config.is_conditional,
+            ).to(self.device)
+        elif self.config.model_type == "simple":
+            from .simple_models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                use_self_attention=self.config.is_self_attention_g,
+                is_conditional=self.config.is_conditional,
+            ).to(self.device)
+        else:
+            from .models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                is_self_attention=self.config.is_self_attention_g,
+                is_conditional=self.config.is_conditional,
+            ).to(self.device)
+
+        if self.config.model_type == 'simple':
+            from .simple_models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+                is_self_attention=self.config.is_self_attention_d,
+                is_minibatch_std=self.config.is_minibatch_std,
+                is_spectral_norm=self.config.is_spectral_norm,
+                is_conditional=self.config.is_conditional,
+                use_recon_loss=self.config.use_recon_loss,
+            ).to(self.device)
+        else:
+            from .models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+                is_self_attention=self.config.is_self_attention_d,
+                is_minibatch_std=self.config.is_minibatch_std,
+                is_spectral_norm=self.config.is_spectral_norm,
+                is_conditional=self.config.is_conditional,
+            ).to(self.device)
 
         # check model summary
         self.generator.summary(batch_size=self.config.train_batch_size)
@@ -90,13 +133,11 @@ class Trainer:
 
         # Optimizer
         self.optimizer_g = torch.optim.Adam(
-            self.generator.parameters(), lr=config.generator_lr
+            self.generator.parameters(), lr=self.config.generator_lr
         )
         self.optimizer_d = torch.optim.Adam(
-            self.discriminator.parameters(), lr=config.discriminator_lr
+            self.discriminator.parameters(), lr=self.config.discriminator_lr
         )
-
-        self.playability = 0
 
     def train(self):
         wandb.login()
@@ -204,6 +245,15 @@ class Trainer:
                         if check_playable(level_str):
                             playable_levels.append(level_str)
 
+                    if self.config.dataset_type == "train":
+                        for playable_level in playable_levels:
+                            with open(
+                                os.path.join(self.config.level_data_path,
+                                             self.config.env_name, "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
+                            ) as f:
+                                f.write(playable_level)
+                                self.data_index += 1
+
                     if self.config.bootstrap and len(playable_levels) > 1:
                         self._bootstrap(playable_levels)
 
@@ -230,6 +280,14 @@ class Trainer:
                             model_save_path, epoch, len(playable_levels))
                         max_playable_count = len(playable_levels)
                         self.playability = max_playable_count / self.config.eval_playable_counts
+
+                    if len(playable_levels)/self.config.eval_playable_counts > self.config.recall_weight_threshold:
+                        print("recall")
+                        self._build_model()
+
+                # if epoch % self.config.restore_state_dict_interval == 0:
+                #     self.state_dict_g = self.generator.state_dict()
+                #     self.state_dict_d = self.discriminator.state_dict()
 
                 if step == self.config.steps:
                     break
@@ -258,7 +316,7 @@ class Trainer:
             for file in self.dataset_files:
                 with open(
                     os.path.join(self.config.level_data_path,
-                                 self.config.env_name, "train", file), mode="r"
+                                 self.config.env_name, self.config.dataset_type, file), mode="r"
                 ) as f:
                     lvl_str = f.read()
                 change_levels.append([file, lvl_str])
@@ -279,7 +337,7 @@ class Trainer:
                 file = change_levels[i][0]
                 with open(
                     os.path.join(self.config.level_data_path,
-                                 self.config.env_name, "train", file), mode="w"
+                                 self.config.env_name, self.config.dataset_type, file), mode="w"
                 ) as f:
                     f.write(playable_levels[i][0])
         else:
@@ -290,9 +348,19 @@ class Trainer:
         update discriminator: maximize log(D(x)) + log(1-D(G(z)))
         """
         self.discriminator.zero_grad()
-        real_logits = self.discriminator(real_images, label).view(-1)
-        fake_logits = self.discriminator(
-            torch.nn.Softmax2d()(fake_images).detach(), label).view(-1)
+        if self.config.use_recon_loss:
+            real_logits, real_recon = self.discriminator(
+                real_images, label)
+            fake_logits, _ = self.discriminator(
+                torch.nn.Softmax2d()(fake_images).detach(), label)
+            real_logits, fake_logits = real_logits.view(
+                -1), fake_logits.view(-1)
+        else:
+            real_logits = self.discriminator(
+                real_images, label).view(-1)
+            fake_logits = self.discriminator(
+                torch.nn.Softmax2d()(fake_images).detach(), label).view(-1)
+
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
                 real_logits, fake_logits, self.config.label_flip_prob)
@@ -302,9 +370,11 @@ class Trainer:
             )
         else:
             raise NotImplementedError()
-        loss_real.backward()
-        loss_fake.backward()
         discriminator_loss = loss_real + loss_fake
+        if self.config.use_recon_loss:
+            recon_loss = loss.recon_loss(real_recon, real_images)
+            discriminator_loss += self.config.recon_lambda*recon_loss
+        discriminator_loss.backward()
         self.optimizer_d.step()
 
         return D_x, D_G_z, discriminator_loss.item()
@@ -314,8 +384,12 @@ class Trainer:
         update generator: maximize log(D(G(z)))
         """
         self.generator.zero_grad()
-        fake_logits = self.discriminator(
-            torch.nn.Softmax2d()(fake_images_logit), label).view(-1)
+        if self.config.use_recon_loss:
+            fake_logits = self.discriminator(
+                torch.nn.Softmax2d()(fake_images_logit), label)[0].view(-1)
+        else:
+            fake_logits = self.discriminator(
+                torch.nn.Softmax2d()(fake_images_logit), label).view(-1)
         if self.config.adv_loss == "baseline":
             generator_loss = loss.g_loss(fake_logits)
         elif self.config.adv_loss == "hinge":
@@ -377,7 +451,7 @@ class Trainer:
         file = self.dataset_files[index]
         with open(
             os.path.join(self.config.level_data_path,
-                         self.config.env_name, "train", file),
+                         self.config.env_name, self.config.dataset_type, file),
             "w",
         ) as f:
             f.write(level_str)

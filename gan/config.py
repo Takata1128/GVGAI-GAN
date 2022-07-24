@@ -17,6 +17,9 @@ class TrainingConfig:
     level_data_path: str = (
         os.path.dirname(__file__) + "/data/level"
     )  # Training dataset path
+
+    dataset_type: str = "generated_part"  # [train, generated]
+
     checkpoints_path: str = (
         os.path.dirname(__file__) + "/checkpoints"
     )  # save model path
@@ -27,6 +30,7 @@ class TrainingConfig:
     discriminator_filters: int = 16
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
+    model_type: str = "simple"  # "normal","simple","branch"
     is_self_attention_g: bool = True
     is_self_attention_d: bool = True
     is_minibatch_std: bool = False
@@ -34,21 +38,24 @@ class TrainingConfig:
     is_conditional: bool = False
 
     # learning parameters
-    adv_loss: str = "baseline"  # ["baseline","hinge"]
-    div_loss: str = "l1"  # ["l1","l2","none"]
-    lambda_div: float = 100.0
-    div_loss_threshold_playability: float = 0.5
+    adv_loss: str = "hinge"  # ["baseline","hinge"]
+    div_loss: str = "none"  # ["l1","l2","none"]
+    lambda_div: float = 50.0
+    div_loss_threshold_playability: float = 0.0
 
     generator_lr: float = 0.0001
     discriminator_lr: float = 0.0001
     epochs: int = 1000000  # training epochs
-    steps: int = 50000*4  # training steps
-    train_batch_size: int = 16  # training batch size
+    steps: int = 50000  # training steps
+    train_batch_size: int = 64  # training batch size
     test_batch_size: int = 5  # test batch size
     label_flip_prob: float = 0.0  # prob of flipping real label
-    save_image_interval_epoch: int = 100  # save images interval
+    save_image_interval_epoch: int = 1000  # save images interval
     save_model_interval_epoch: int = 5000  # save models interval
-    eval_playable_interval_epoch: int = 100  # check playable interval
+    eval_playable_interval_epoch: int = 1000  # check playable interval
+
+    use_recon_loss: bool = True
+    recon_lambda: float = 1.0
 
     # others parameters
     seed: int = 0  # random seed
@@ -59,7 +66,10 @@ class TrainingConfig:
     dataset_size: int = 512
     flip_data: bool = False
     bootstrap: str = "none"  # ["none", "random", "smart"]
-    dataset_max_change_count: int = 300
+    dataset_max_change_count: int = 5
+
+    restore_state_dict_interval: int = 1000
+    recall_weight_threshold: float = 10.05
 
     def set_env(self):
         env = Env(self.env_name, self.env_version)

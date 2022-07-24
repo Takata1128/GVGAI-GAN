@@ -10,9 +10,9 @@ if __name__ == "__main__":
     config = TrainingConfig()
     # config.env_name = 'aliens'
     config.set_env()
-    prepare_dataset(
-        seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, clone_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-    )
+    # prepare_dataset(
+    #     seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, clone_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    # )
     trainer = Trainer(config)
     trainer.generator.summary()
     trainer.discriminator.summary()

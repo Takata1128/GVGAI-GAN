@@ -38,6 +38,11 @@ def div_loss(fake: torch.Tensor, loss_type: str, lambda_div=1.0):
         return torch.tensor(0)
 
 
+def recon_loss(recon: torch.Tensor, real: torch.Tensor):
+    recon = torch.nn.Softmax2d()(recon)
+    return torch.nn.L1Loss()(recon, real)
+
+
 def d_loss_hinge(real_logits: torch.Tensor, fake_logits: torch.Tensor):
     loss_real = torch.relu(1.0 - real_logits).mean()
     loss_fake = torch.relu(1.0 + fake_logits).mean()
