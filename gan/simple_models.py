@@ -151,8 +151,9 @@ class Generator(nn.Module):
         )
 
     def forward(self, z, label=None):
-        x = z.view(-1, z.shape[1], 1, 1)
-        x = self.preprocess(x)
+        z = torch.unsqueeze(z, -1)
+        z = torch.unsqueeze(z, -1)
+        x = self.preprocess(z)
         x = self.block1(x)
         x = self.block2(x)
         x = self.outconv(x)

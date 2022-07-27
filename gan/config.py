@@ -1,5 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+
+from numpy import False_
 from .env import Env
 import os
 
@@ -18,21 +20,21 @@ class TrainingConfig:
         os.path.dirname(__file__) + "/data/level"
     )  # Training dataset path
 
-    dataset_type: str = "generated_part"  # [train, generated]
+    dataset_type: str = "train"  # [train, generated]
 
     checkpoints_path: str = (
         os.path.dirname(__file__) + "/checkpoints"
     )  # save model path
 
     # model define
-    latent_size: int = 64  # latent dims for generation
-    generator_filters: int = 128
+    latent_size: int = 128  # latent dims for generation
+    generator_filters: int = 256
     discriminator_filters: int = 16
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
-    model_type: str = "simple"  # "normal","simple","branch"
-    is_self_attention_g: bool = True
-    is_self_attention_d: bool = True
+    model_type: str = "normal"  # "normal","simple","branch"
+    is_self_attention_g: bool = False
+    is_self_attention_d: bool = False
     is_minibatch_std: bool = False
     is_spectral_norm: bool = False
     is_conditional: bool = False
@@ -50,11 +52,11 @@ class TrainingConfig:
     train_batch_size: int = 64  # training batch size
     test_batch_size: int = 5  # test batch size
     label_flip_prob: float = 0.0  # prob of flipping real label
-    save_image_interval_epoch: int = 1000  # save images interval
+    save_image_interval_epoch: int = 100  # save images interval
     save_model_interval_epoch: int = 5000  # save models interval
-    eval_playable_interval_epoch: int = 1000  # check playable interval
+    eval_playable_interval_epoch: int = 100  # check playable interval
 
-    use_recon_loss: bool = True
+    use_recon_loss: bool = False
     recon_lambda: float = 1.0
 
     # others parameters

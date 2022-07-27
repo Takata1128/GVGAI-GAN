@@ -132,10 +132,10 @@ class Trainer:
         self.discriminator.summary(batch_size=self.config.train_batch_size)
 
         # Optimizer
-        self.optimizer_g = torch.optim.Adam(
+        self.optimizer_g = torch.optim.RMSprop(
             self.generator.parameters(), lr=self.config.generator_lr
         )
-        self.optimizer_d = torch.optim.Adam(
+        self.optimizer_d = torch.optim.RMSprop(
             self.discriminator.parameters(), lr=self.config.discriminator_lr
         )
 
@@ -197,7 +197,7 @@ class Trainer:
                     )
                     fake_logit = self.generator(latent, label)
 
-                    Dx, DGz_d, discriminator_loss = self._discriminator_update(
+                    Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
                         real, fake_logit, label
                     )
                     generator_loss, div_loss = self._generator_update(
@@ -209,6 +209,8 @@ class Trainer:
                     metrics["Generator Loss"] = generator_loss
                     if self.config.div_loss != "none":
                         metrics["Generator Div Loss"] = div_loss
+                    if self.config.use_recon_loss:
+                        metrics["Reconstruction Loss"] = recon_loss
                     metrics["Epoch"] = epoch
                     wandb.log(metrics)
 
@@ -229,13 +231,50 @@ class Trainer:
                         )
                         for lvl in level_strs
                     ]
-
                     grid_level_img = make_grid(p_level_img, nrow=3, padding=0)
                     images = wandb.Image(
                         grid_level_img, caption="generated levels")
                     wandb.log({"Generated Levels": images})
 
+                    if self.config.use_recon_loss:
+                        _, recon = self.discriminator(real[:9])
+                        real_level_strs = tensor_to_level_str(
+                            self.config.env_name, real[:9]
+                        )
+                        real_level_img = [
+                            torch.Tensor(
+                                np.array(self.level_visualizer.draw_level(lvl)).transpose(
+                                    2, 0, 1
+                                )
+                                / 255.0
+                            )
+                            for lvl in real_level_strs
+                        ]
+                        recon_level_strs = tensor_to_level_str(
+                            self.config.env_name, recon
+                        )
+                        recon_level_img = [
+                            torch.Tensor(
+                                np.array(self.level_visualizer.draw_level(lvl)).transpose(
+                                    2, 0, 1
+                                )
+                                / 255.0
+                            )
+                            for lvl in recon_level_strs
+                        ]
+                        real_level_img = make_grid(
+                            real_level_img, nrow=3, padding=0)
+                        recon_level_img = make_grid(
+                            recon_level_img, nrow=3, padding=0)
+                        images = wandb.Image(
+                            real_level_img, caption="real levels")
+                        wandb.log({"Real Levels": images})
+                        images = wandb.Image(
+                            recon_level_img, caption="reconstructed levels")
+                        wandb.log({"Reconstructed Levels": images})
+
                 if epoch % self.config.eval_playable_interval_epoch == 0:
+
                     p_level = torch.nn.Softmax2d()(
                         self.generator(latents_for_eval, labels_for_eval))
                     level_strs = tensor_to_level_str(
@@ -371,13 +410,16 @@ class Trainer:
         else:
             raise NotImplementedError()
         discriminator_loss = loss_real + loss_fake
+
+        recon_loss_item = None
         if self.config.use_recon_loss:
             recon_loss = loss.recon_loss(real_recon, real_images)
             discriminator_loss += self.config.recon_lambda*recon_loss
+            recon_loss_item = recon_loss.item()
         discriminator_loss.backward()
         self.optimizer_d.step()
 
-        return D_x, D_G_z, discriminator_loss.item()
+        return D_x, D_G_z, discriminator_loss.item(), recon_loss_item
 
     def _generator_update(self, fake_images_logit, label=None):
         """
