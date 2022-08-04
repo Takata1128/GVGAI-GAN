@@ -100,3 +100,35 @@ def check_shape_similarity(level1: str, level2: str):
             hit += 1
         n += 1
     return hit / n if n > 0 else None
+
+
+def make_zelda_level(wall_p=0.20, height=12, width=16):
+    requirements = ['+', 'A', 'g']
+    requirements_positions = []
+
+    for c in requirements:
+        while True:
+            rx = np.random.randint(1, width-1)
+            ry = np.random.randint(1, height-1)
+            pos = (rx, ry)
+            if pos not in requirements_positions:
+                requirements_positions.append(pos)
+                break
+
+    level_rows = [["." for i in range(width)] for j in range(height)]
+    for i in range(height):
+        for j in range(width):
+            if(i == 0 or i == height-1 or j == 0 or j == width-1):
+                level_rows[i][j] = 'w'
+
+            if np.random.rand() < wall_p:
+                level_rows[i][j] = 'w'
+
+            for k, pos in enumerate(requirements_positions):
+                x, y = pos
+                if (j, i) == pos:
+                    level_rows[i][j] = requirements[k]
+
+    level_rows = [''.join(row) for row in level_rows]
+    ret = '\n'.join(level_rows)
+    return ret

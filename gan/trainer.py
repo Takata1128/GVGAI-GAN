@@ -92,6 +92,14 @@ class Trainer:
                 use_self_attention=self.config.is_self_attention_g,
                 is_conditional=self.config.is_conditional,
             ).to(self.device)
+        elif self.config.model_type == "small":
+            from.small_models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters
+            ).to(self.device)
         else:
             from .models import Generator
             self.generator = Generator(
@@ -115,6 +123,15 @@ class Trainer:
                 is_conditional=self.config.is_conditional,
                 use_recon_loss=self.config.use_recon_loss,
             ).to(self.device)
+        elif self.config.model_type == 'small':
+            from .small_models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+                is_minibatch_std=self.config.is_minibatch_std,
+                use_recon_loss=self.config.use_recon_loss
+            )
         else:
             from .models import Discriminator
             self.discriminator = Discriminator(

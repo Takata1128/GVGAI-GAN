@@ -1,5 +1,5 @@
 import argparse
-from gan.config import TrainingConfig
+from gan.config import NormalModelConfig, SmallModelConfig, TrainingConfig, DataExtendConfig, BranchModelConfig
 from gan.level_dataset_extend import prepare_dataset
 from gan.trainer import Trainer
 
@@ -7,7 +7,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, default="none")
     args = parser.parse_args()
-    config = TrainingConfig()
+    config = DataExtendConfig()
     config.set_env()
     if config.dataset_type == "train":
         prepare_dataset(

@@ -1,7 +1,5 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-
-from numpy import False_
 from .env import Env
 import os
 
@@ -20,7 +18,7 @@ class TrainingConfig:
         os.path.dirname(__file__) + "/data/level"
     )  # Training dataset path
 
-    dataset_type: str = "train"  # [train, generated]
+    dataset_type: str = "generated_part"  # [train, generated]
 
     checkpoints_path: str = (
         os.path.dirname(__file__) + "/checkpoints"
@@ -32,7 +30,7 @@ class TrainingConfig:
     discriminator_filters: int = 16
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
-    model_type: str = "normal"  # "normal","simple","branch"
+    model_type: str = "small"  # "normal","simple","branch","small"
     is_self_attention_g: bool = False
     is_self_attention_d: bool = False
     is_minibatch_std: bool = False
@@ -45,12 +43,12 @@ class TrainingConfig:
     lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 
+    train_batch_size: int = 64  # training batch size
+    steps: int = 50000  # training steps
+
     generator_lr: float = 0.0001
     discriminator_lr: float = 0.0001
     epochs: int = 1000000  # training epochs
-    steps: int = 50000  # training steps
-    train_batch_size: int = 64  # training batch size
-    test_batch_size: int = 5  # test batch size
     label_flip_prob: float = 0.0  # prob of flipping real label
     save_image_interval_epoch: int = 100  # save images interval
     save_model_interval_epoch: int = 5000  # save models interval
@@ -72,6 +70,137 @@ class TrainingConfig:
 
     restore_state_dict_interval: int = 1000
     recall_weight_threshold: float = 10.05
+
+    def set_env(self):
+        env = Env(self.env_name, self.env_version)
+        self.input_shape = env.state_shape
+        self.model_shapes = env.model_shape
+
+
+@dataclass
+class DataExtendConfig(TrainingConfig):
+    dataset_type: str = "train"  # [train, generated]
+
+    # model define
+    latent_size: int = 128  # latent dims for generation
+    generator_filters: int = 256
+    discriminator_filters: int = 16
+    input_shape: tuple[int] = None
+    model_shapes: list[tuple[int]] = None
+    model_type: str = "normal"  # "normal","simple","branch","small"
+    is_self_attention_g: bool = True
+    is_self_attention_d: bool = True
+    is_minibatch_std: bool = False
+    is_spectral_norm: bool = False
+    is_conditional: bool = False
+
+    save_image_interval_epoch: int = 300  # save images interval
+    save_model_interval_epoch: int = 5000  # save models interval
+    eval_playable_interval_epoch: int = 300  # check playable interval
+
+    # learning parameters
+    adv_loss: str = "hinge"  # ["baseline","hinge"]
+    div_loss: str = "none"  # ["l1","l2","none"]
+    lambda_div: float = 50.0
+    div_loss_threshold_playability: float = 0.0
+
+    train_batch_size: int = 64  # training batch size
+    steps: int = 500000  # training steps
+
+    recall_weight_threshold: float = 0.05
+
+    bootstrap: str = "none"  # ["none", "random", "smart"]
+    dataset_max_change_count: int = 3
+
+
+@dataclass
+class NormalModelConfig(TrainingConfig):
+    dataset_type: str = "generated_good"  # [train, generated]
+
+    # model define
+    latent_size: int = 128  # latent dims for generation
+    generator_filters: int = 256
+    discriminator_filters: int = 16
+    input_shape: tuple[int] = None
+    model_shapes: list[tuple[int]] = None
+    model_type: str = "normal"  # "normal","simple","branch","small"
+    is_self_attention_g: bool = True
+    is_self_attention_d: bool = True
+    is_minibatch_std: bool = False
+    is_spectral_norm: bool = False
+    is_conditional: bool = False
+
+    # learning parameters
+    adv_loss: str = "baseline"  # ["baseline","hinge"]
+    div_loss: str = "none"  # ["l1","l2","none"]
+    lambda_div: float = 50.0
+    div_loss_threshold_playability: float = 0.0
+
+    bootstrap: str = "none"  # ["none", "random", "smart"]
+
+    train_batch_size: int = 64  # training batch size
+    steps: int = 50000  # training steps
+
+
+@dataclass
+class BranchModelConfig(TrainingConfig):
+    dataset_type: str = "generated_good"  # [train, generated]
+
+    # model define
+    latent_size: int = 128  # latent dims for generation
+    generator_filters: int = 256
+    discriminator_filters: int = 16
+    input_shape: tuple[int] = None
+    model_shapes: list[tuple[int]] = None
+    model_type: str = "branch"  # "normal","simple","branch","small"
+    is_self_attention_g: bool = True
+    is_self_attention_d: bool = True
+    is_minibatch_std: bool = False
+    is_spectral_norm: bool = False
+    is_conditional: bool = False
+
+    # learning parameters
+    adv_loss: str = "baseline"  # ["baseline","hinge"]
+    div_loss: str = "none"  # ["l1","l2","none"]
+    lambda_div: float = 50.0
+    div_loss_threshold_playability: float = 0.0
+
+    bootstrap: str = "none"  # ["none", "random", "smart"]
+
+    train_batch_size: int = 64  # training batch size
+    steps: int = 50000  # training steps
+
+
+@dataclass
+class SmallModelConfig(TrainingConfig):
+    dataset_type: str = "generated_good"  # [train, generated]
+
+    # model define
+    latent_size: int = 64  # latent dims for generation
+    generator_filters: int = 128
+    discriminator_filters: int = 16
+    input_shape: tuple[int] = None
+    model_shapes: list[tuple[int]] = None
+    model_type: str = "small"  # "normal","simple","branch","small"
+    is_self_attention_g: bool = True
+    is_self_attention_d: bool = True
+    is_minibatch_std: bool = False
+    is_spectral_norm: bool = False
+    is_conditional: bool = False
+
+    # learning parameters
+    adv_loss: str = "hinge"  # ["baseline","hinge"]
+    div_loss: str = "none"  # ["l1","l2","none"]
+    lambda_div: float = 50.0
+    div_loss_threshold_playability: float = 0.0
+
+    bootstrap: str = "none"  # ["none", "random", "smart"]
+
+    train_batch_size: int = 64  # training batch size
+    steps: int = 50000  # training steps
+
+    use_recon_loss: bool = True
+    recon_lambda: float = 1.0
 
     def set_env(self):
         env = Env(self.env_name, self.env_version)
