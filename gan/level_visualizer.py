@@ -5,9 +5,8 @@ from .env import Env
 
 
 class LevelVisualizer:
-    def __init__(self, env: str, version: str, tile_size=16, padding=2):
-        self.version = version
-        self.game = Env(env, self.version)
+    def __init__(self, env: Env, tile_size=16, padding=2):
+        self.game = env
         self.tile_size = tile_size
         self.dir = gym_gvgai.dir
 
@@ -21,7 +20,7 @@ class LevelVisualizer:
 
     def read_gamefile(self):
         path = os.path.join(
-            self.dir, "envs", "games", f"{self.game.name}_{self.version}", f"{self.game.name}.txt"
+            self.dir, "envs", "games", f"{self.game.name}_{self.game.version}", f"{self.game.name}.txt"
         )
         with open(path, "r") as game:
             gamefile = game.readlines()

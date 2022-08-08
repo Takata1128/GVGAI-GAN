@@ -6,7 +6,9 @@ import os
 import torch
 import operator
 import numpy as np
+
 from . import loss
+from .env import Env
 from .level_visualizer import LevelVisualizer
 from .dataset import LevelDataset
 from .config import TrainingConfig
@@ -22,6 +24,7 @@ from .utils import (
 class Trainer:
     def __init__(self, config: TrainingConfig):
         self.config = config
+        self.env = Env(self.config.env_name, self.config.env_version)
 
         # reproducible settings
         np.random.seed(config.seed)
@@ -41,7 +44,7 @@ class Trainer:
         # Dataset
         train_dataset = LevelDataset(
             config.level_data_path,
-            config.env_name,
+            self.env,
             datamode=self.config.dataset_type,
             transform=None,
             latent_size=config.latent_size,
@@ -58,15 +61,24 @@ class Trainer:
         )
 
         # Level Visualizer
-        self.level_visualizer = LevelVisualizer(
-            config.env_name, config.env_version)
+        self.level_visualizer = LevelVisualizer(self.env)
 
         # Network
         self._build_model()
 
+        # Other
         self.playability = 0
-
         self.data_index = 0
+        self.steps_per_epoch = len(self.train_loader)
+        self.model_save_epoch = self.config.save_model_interval//(
+            self.config.train_batch_size*self.steps_per_epoch)
+        self.image_save_epoch = self.config.save_image_interval//(
+            self.config.train_batch_size*self.steps_per_epoch)
+        self.eval_epoch = self.config.eval_playable_interval//(
+            self.config.train_batch_size*self.steps_per_epoch)
+        print(f"model_save_epoch:{self.model_save_epoch}")
+        print(f"image_save_epoch:{self.image_save_epoch}")
+        print(f"eval_epoch:{self.eval_epoch}")
 
     def _build_model(self):
         latent_shape = (self.config.latent_size,)
@@ -79,8 +91,8 @@ class Trainer:
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
                 filters=self.config.generator_filters,
-                is_self_attention=self.config.is_self_attention_g,
-                is_conditional=self.config.is_conditional,
+                is_self_attention=self.config.use_self_attention_g,
+                is_conditional=self.config.use_conditional,
             ).to(self.device)
         elif self.config.model_type == "simple":
             from .simple_models import Generator
@@ -89,8 +101,8 @@ class Trainer:
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
                 filters=self.config.generator_filters,
-                use_self_attention=self.config.is_self_attention_g,
-                is_conditional=self.config.is_conditional,
+                use_self_attention=self.config.use_self_attention_g,
+                is_conditional=self.config.use_conditional,
             ).to(self.device)
         elif self.config.model_type == "small":
             from.small_models import Generator
@@ -98,7 +110,17 @@ class Trainer:
                 out_dim=self.config.input_shape[0],
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
-                filters=self.config.generator_filters
+                filters=self.config.generator_filters,
+                use_conditional=self.config.use_conditional
+            ).to(self.device)
+        elif self.config.model_type == "only_sa":
+            from.sa_models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                use_self_attention=self.config.use_self_attention_g
             ).to(self.device)
         else:
             from .models import Generator
@@ -107,8 +129,8 @@ class Trainer:
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
                 filters=self.config.generator_filters,
-                is_self_attention=self.config.is_self_attention_g,
-                is_conditional=self.config.is_conditional,
+                is_self_attention=self.config.use_self_attention_g,
+                is_conditional=self.config.use_conditional,
             ).to(self.device)
 
         if self.config.model_type == 'simple':
@@ -117,10 +139,10 @@ class Trainer:
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
                 filters=self.config.discriminator_filters,
-                is_self_attention=self.config.is_self_attention_d,
-                is_minibatch_std=self.config.is_minibatch_std,
-                is_spectral_norm=self.config.is_spectral_norm,
-                is_conditional=self.config.is_conditional,
+                is_self_attention=self.config.use_self_attention_d,
+                is_minibatch_std=self.config.use_minibatch_std,
+                is_spectral_norm=self.config.use_spectral_norm,
+                is_conditional=self.config.use_conditional,
                 use_recon_loss=self.config.use_recon_loss,
             ).to(self.device)
         elif self.config.model_type == 'small':
@@ -129,7 +151,16 @@ class Trainer:
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
                 filters=self.config.discriminator_filters,
-                is_minibatch_std=self.config.is_minibatch_std,
+                is_minibatch_std=self.config.use_minibatch_std,
+                use_recon_loss=self.config.use_recon_loss,
+                use_conditional=self.config.use_conditional
+            )
+        elif self.config.model_type == 'only_sa':
+            from .sa_models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
                 use_recon_loss=self.config.use_recon_loss
             )
         else:
@@ -138,15 +169,11 @@ class Trainer:
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
                 filters=self.config.discriminator_filters,
-                is_self_attention=self.config.is_self_attention_d,
-                is_minibatch_std=self.config.is_minibatch_std,
-                is_spectral_norm=self.config.is_spectral_norm,
-                is_conditional=self.config.is_conditional,
+                is_self_attention=self.config.use_self_attention_d,
+                is_minibatch_std=self.config.use_minibatch_std,
+                is_spectral_norm=self.config.use_spectral_norm,
+                is_conditional=self.config.use_conditional,
             ).to(self.device)
-
-        # check model summary
-        self.generator.summary(batch_size=self.config.train_batch_size)
-        self.discriminator.summary(batch_size=self.config.train_batch_size)
 
         # Optimizer
         self.optimizer_g = torch.optim.RMSprop(
@@ -160,42 +187,21 @@ class Trainer:
         wandb.login()
         metrics = {}
         max_playable_count = 0
-        # summary(self.generator, (config.latent_size,), device=self.device)
-        # summary(self.discriminator, config.input_shape, device=self.device)
         with wandb.init(project=f"{self.config.env_name} Level GAN", config=self.config.__dict__):
+            # check model summary
+            self.generator.summary(batch_size=self.config.train_batch_size)
+            self.discriminator.summary(batch_size=self.config.train_batch_size)
+
             step = 0
             latents_for_show = torch.randn(
-                9,
-                self.config.latent_size,
-            ).to(self.device)
+                9, self.config.latent_size,).to(self.device)
             latents_for_eval = torch.randn(
                 self.config.eval_playable_counts,
                 self.config.latent_size,
             ).to(self.device)
-            labels_for_show = [
-                [100, 86, 1, 1, 1, 1, 1, 1],
-                [99, 87, 1, 1, 1, 1, 1, 1],
-                [87, 99, 1, 1, 1, 1, 1, 1],
-                [100, 86, 1, 1, 1, 1, 1, 1],
-                [100, 86, 1, 1, 1, 1, 1, 1],
-                [136, 50, 1, 1, 1, 1, 1, 1],
-                [50, 136, 1, 1, 1, 1, 1, 1],
-                [176, 10, 1, 1, 1, 1, 1, 1],
-                [10, 176, 1, 1, 1, 1, 1, 1],
-            ]
-            labels_for_show = (
-                torch.tensor(np.array(labels_for_show)).int().to(self.device)
-            )
-            labels_for_eval = []
-            for i in range(self.config.eval_playable_counts // 5):
-                labels_for_eval.append([100, 86, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([110, 76, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([120, 66, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([130, 56, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([140, 46, 1, 1, 1, 1, 1, 1])
-            labels_for_eval = (
-                torch.tensor(np.array(labels_for_eval)).int().to(self.device)
-            )
+            labels_for_show = self._get_labels(9)
+            labels_for_eval = self._get_labels(
+                self.config.eval_playable_counts)
 
             # model_save_path
             model_save_path = os.path.join(
@@ -210,7 +216,7 @@ class Trainer:
                     latent, real, label = (
                         latent.to(self.device).float(),
                         real.to(self.device).float(),
-                        label.to(self.device).int(),
+                        label.to(self.device).float(),
                     )
                     fake_logit = self.generator(latent, label)
 
@@ -234,7 +240,7 @@ class Trainer:
                     if step == self.config.steps:
                         break
 
-                if epoch % self.config.save_image_interval_epoch == 0:
+                if epoch % self.image_save_epoch == 0:
                     p_level = torch.nn.Softmax2d()(
                         self.generator(latents_for_show, labels_for_show))
                     level_strs = tensor_to_level_str(
@@ -254,7 +260,7 @@ class Trainer:
                     wandb.log({"Generated Levels": images})
 
                     if self.config.use_recon_loss:
-                        _, recon = self.discriminator(real[:9])
+                        _, recon = self.discriminator(real[:9], label[:9])
                         real_level_strs = tensor_to_level_str(
                             self.config.env_name, real[:9]
                         )
@@ -290,10 +296,9 @@ class Trainer:
                             recon_level_img, caption="reconstructed levels")
                         wandb.log({"Reconstructed Levels": images})
 
-                if epoch % self.config.eval_playable_interval_epoch == 0:
-
-                    p_level = torch.nn.Softmax2d()(
-                        self.generator(latents_for_eval, labels_for_eval))
+                if epoch % self.eval_epoch == 0:
+                    p_level = torch.softmax(
+                        self.generator(latents_for_eval, labels_for_eval), dim=1)
                     level_strs = tensor_to_level_str(
                         self.config.env_name, p_level)
                     playable_levels = []
@@ -340,10 +345,6 @@ class Trainer:
                     if len(playable_levels)/self.config.eval_playable_counts > self.config.recall_weight_threshold:
                         print("recall")
                         self._build_model()
-
-                # if epoch % self.config.restore_state_dict_interval == 0:
-                #     self.state_dict_g = self.generator.state_dict()
-                #     self.state_dict_d = self.discriminator.state_dict()
 
                 if step == self.config.steps:
                     break
@@ -399,23 +400,23 @@ class Trainer:
         else:
             pass
 
-    def _discriminator_update(self, real_images, fake_images, label=None):
+    def _discriminator_update(self, real_images_logit, fake_images_logit, label=None):
         """
         update discriminator: maximize log(D(x)) + log(1-D(G(z)))
         """
         self.discriminator.zero_grad()
         if self.config.use_recon_loss:
             real_logits, real_recon = self.discriminator(
-                real_images, label)
+                real_images_logit, label)
             fake_logits, _ = self.discriminator(
-                torch.nn.Softmax2d()(fake_images).detach(), label)
+                torch.softmax(fake_images_logit, dim=1).detach(), label)
             real_logits, fake_logits = real_logits.view(
                 -1), fake_logits.view(-1)
         else:
             real_logits = self.discriminator(
-                real_images, label).view(-1)
+                real_images_logit, label).view(-1)
             fake_logits = self.discriminator(
-                torch.nn.Softmax2d()(fake_images).detach(), label).view(-1)
+                torch.softmax(fake_images_logit, dim=1).detach(), label).view(-1)
 
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
@@ -430,7 +431,7 @@ class Trainer:
 
         recon_loss_item = None
         if self.config.use_recon_loss:
-            recon_loss = loss.recon_loss(real_recon, real_images)
+            recon_loss = loss.recon_loss(real_recon, real_images_logit)
             discriminator_loss += self.config.recon_lambda*recon_loss
             recon_loss_item = recon_loss.item()
         discriminator_loss.backward()
@@ -445,17 +446,17 @@ class Trainer:
         self.generator.zero_grad()
         if self.config.use_recon_loss:
             fake_logits = self.discriminator(
-                torch.nn.Softmax2d()(fake_images_logit), label)[0].view(-1)
+                torch.softmax(fake_images_logit, dim=1), label)[0].view(-1)
         else:
             fake_logits = self.discriminator(
-                torch.nn.Softmax2d()(fake_images_logit), label).view(-1)
+                torch.softmax(fake_images_logit, dim=1), label).view(-1)
         if self.config.adv_loss == "baseline":
             generator_loss = loss.g_loss(fake_logits)
         elif self.config.adv_loss == "hinge":
             generator_loss = loss.g_loss_hinge(fake_logits)
 
         div_loss = loss.div_loss(
-            torch.nn.Softmax2d()(fake_images_logit), self.config.div_loss, self.config.lambda_div)
+            torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
         if self.playability > self.config.div_loss_threshold_playability:
             generator_loss += div_loss
 
@@ -514,3 +515,20 @@ class Trainer:
             "w",
         ) as f:
             f.write(level_str)
+
+    def _get_labels(self, n_labels):
+        labels = []
+        for i in range(n_labels):
+            file = self.dataset_files[np.random.randint(
+                len(self.dataset_files))]
+            with open(os.path.join(self.config.level_data_path, self.config.env_name, self.config.dataset_type, file), "r") as f:
+                datalist = f.readlines()
+            # label : onehot vector of counts of map tile object.
+            label = np.zeros(len(self.env.ascii))
+            for i, s in enumerate(datalist):
+                for j, c in enumerate(s):
+                    if c == "\n":
+                        break
+                    label[self.env.ascii.index(c)] += 1
+            labels.append(label)
+        return torch.tensor(np.array(labels)).float().to(self.device)
