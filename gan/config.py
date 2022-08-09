@@ -194,7 +194,7 @@ class SmallModelConfig(TrainingConfig):
     bootstrap: str = "none"  # ["none", "random", "smart"]
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 100000  # training steps
+    steps: int = 150000  # training steps
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0
@@ -211,7 +211,7 @@ class OnlySAModelConfig(TrainingConfig):
 
     # model define
     latent_size: int = 32  # latent dims for generation
-    generator_filters: int = 128
+    generator_filters: int = 16
     discriminator_filters: int = 16
     model_type: str = "small"  # "normal","simple","branch","small","only_sa"
     use_self_attention_g: bool = True
