@@ -1,5 +1,5 @@
 __pycache__
-checkpoints
-data
-GVGAI_GYM
-wandb
+checkpoints/
+data/
+GVGAI_GYM/
+wandb/

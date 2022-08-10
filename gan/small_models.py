@@ -194,12 +194,12 @@ class Discriminator(nn.Module):
         in_ch,
         shapes,
         filters=64,
-        is_minibatch_std=False,
+        use_minibatch_std=False,
         use_recon_loss=False,
         use_conditional=False
     ):
         super(Discriminator, self).__init__()
-        self.use_minibatch_std = is_minibatch_std
+        self.use_minibatch_std = use_minibatch_std
         self.use_recon_loss = use_recon_loss
         self.use_conditional = use_conditional
         self.input_ch = in_ch
@@ -222,8 +222,7 @@ class Discriminator(nn.Module):
         if self.use_minibatch_std:
             self.minibatch_std = MiniBatchStd()
         self.postprocess = nn.Conv2d(
-            filters*4, 1, shapes[-1], 1, 0, bias=False)
-        self.output = nn.Linear(filters*4 + int(is_minibatch_std), 1)
+            filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0, bias=False)
 
     def forward(self, x, label=None):
         x = self.preprocess(x)

@@ -151,7 +151,7 @@ class Trainer:
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
                 filters=self.config.discriminator_filters,
-                is_minibatch_std=self.config.use_minibatch_std,
+                use_minibatch_std=self.config.use_minibatch_std,
                 use_recon_loss=self.config.use_recon_loss,
                 use_conditional=self.config.use_conditional
             )

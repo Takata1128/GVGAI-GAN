@@ -181,7 +181,7 @@ class SmallModelConfig(TrainingConfig):
     model_type: str = "small"  # "normal","simple","branch","small"
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
-    use_minibatch_std: bool = False
+    use_minibatch_std: bool = True
     use_spectral_norm: bool = False
     use_conditional: bool = False
 
@@ -194,7 +194,7 @@ class SmallModelConfig(TrainingConfig):
     bootstrap: str = "none"  # ["none", "random", "smart"]
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 150000  # training steps
+    steps: int = (int)(150000*(train_batch_size/32))  # training steps
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0
