@@ -24,7 +24,7 @@ import numpy as np
 import loss
 from config import EvaluationConfig
 
-from models import Generator, Discriminator
+from models import ShapeGenerator, Discriminator
 
 # from new_models import Generator, Discriminator
 from level_dataset_extend import prepare_dataset
@@ -42,18 +42,19 @@ class Evaluater:
         # torch.backends.cudnn.deterministic = True
 
         if config.cuda:
-            self.device = torch.device("cuda" if torch.cuda.is_available else "cpu")
+            self.device = torch.device(
+                "cuda" if torch.cuda.is_available else "cpu")
             print("device : cuda")
         else:
             self.device = torch.device("cpu")
             print("device : cpu")
 
-        ### Level Visualizer
+        # Level Visualizer
         self.level_visualizer = LevelVisualizer(config.env_name)
 
-        ### Network
+        # Network
         latent_shape = (config.latent_size,)
-        self.generator = Generator(
+        self.generator = ShapeGenerator(
             out_dim=config.input_shape[0],
             shapes=config.model_shapes,
             z_shape=latent_shape,
@@ -124,7 +125,8 @@ class Evaluater:
             labels_for_eval.append([120, 66, 1, 1, 1, 1, 1, 1])
             labels_for_eval.append([130, 56, 1, 1, 1, 1, 1, 1])
             labels_for_eval.append([140, 46, 1, 1, 1, 1, 1, 1])
-        labels_for_eval = torch.tensor(np.array(labels_for_eval)).int().to(self.device)
+        labels_for_eval = torch.tensor(
+            np.array(labels_for_eval)).int().to(self.device)
 
         output_levels = self.generator(latents_for_eval, labels_for_eval)
 
@@ -161,12 +163,14 @@ class Evaluater:
         n_shape_level = 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
-                res_level += check_level_similarity(level_strs[i], level_strs[j])
+                res_level += check_level_similarity(
+                    level_strs[i], level_strs[j])
                 obj_tmp = check_object_similarity(level_strs[i], level_strs[j])
                 if obj_tmp is not None:
                     res_object += obj_tmp
                     n_object_level += 1
-                shape_tmp = check_shape_similarity(level_strs[i], level_strs[j])
+                shape_tmp = check_shape_similarity(
+                    level_strs[i], level_strs[j])
                 if shape_tmp is not None:
                     res_shape += shape_tmp
                     n_shape_level += 1

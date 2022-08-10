@@ -96,7 +96,7 @@ make_another['aliens'] = make_another_aliens
 make_another['roguelike'] = make_another_roguelike
 
 
-def prepare_dataset(seed=0, extend_data=True, flip=True, clone_size=100, game_name="zelda", version='v1'):
+def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_name="zelda", version='v1'):
     np.random.seed(seed)
     visualizer = LevelVisualizer(game_name, version=version)
 
@@ -110,35 +110,32 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, clone_size=100, game_na
 
     lvl_strs = visualizer.game.get_original_levels()
 
+    states = []
     for i, lvl_str in enumerate(lvl_strs):
         state_numpy = visualizer.game.level_strs_to_ndarray(lvl_str)
         state_tensor = torch.unsqueeze(torch.Tensor(state_numpy), 0)
-        states = []
         states.append(state_tensor)
-        lvl_str_re = visualizer.game.level_tensor_to_strs(state_tensor)
-        with open(
-            train_dir_path + f"{str(i)}", mode="w"
-        ) as f:
-            f.write(lvl_str_re[0])
+        # lvl_str_re = visualizer.game.level_tensor_to_strs(state_tensor)
+        # with open(
+        #     train_dir_path + f"{str(i)}.base", mode="w"
+        # ) as f:
+        #     f.write(lvl_str_re[0])
         if flip:
             states.append(torch.flip(state_tensor, [2]))
             states.append(torch.flip(state_tensor, [3]))
             states.append(torch.flip(state_tensor, [2, 3]))
-        for j, st in enumerate(states):
-            lvl_str_re = visualizer.game.level_tensor_to_strs(st)
-            img = visualizer.draw_level(lvl_str_re[0])
-            img.save(os.path.dirname(
-                __file__) + f"/data/level/{game_name}/"+f"level_{i}_{j}.jpg")
-            for k in range(0, clone_size):
-                lvl_str_re = visualizer.game.level_tensor_to_strs(st)
-                if extend_data:
-                    s = make_another[game_name](lvl_str_re[0])
-                else:
-                    s = lvl_str_re[0]
-                with open(
-                    train_dir_path + f"{game_name}_{str(i)}_{str(j)}_{str(k)}", mode="w"
-                ) as f:
-                    f.write(s)
+
+    for j in range(dataset_size):
+        index = j % len(states)
+        lvl_str_re = visualizer.game.level_tensor_to_strs(states[index])
+        if extend_data:
+            s = make_another[game_name](lvl_str_re[0])
+        else:
+            s = lvl_str_re[0]
+        with open(
+            train_dir_path + f"{game_name}_{str(j)}", mode="w"
+        ) as f:
+            f.write(s)
 
 
 if __name__ == "__main__":

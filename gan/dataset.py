@@ -13,12 +13,13 @@ class LevelDataset(Dataset):
     def __init__(
         self,
         root,
-        env_name,
+        env: Env,
         datamode="train",
         transform=transforms.ToTensor(),
         latent_size=100,
     ):
-        self.image_dir = os.path.join(root, env_name, datamode)
+        self.env = env
+        self.image_dir = os.path.join(root, env.name, datamode)
         self.image_paths = [
             os.path.join(self.image_dir, name) for name in os.listdir(self.image_dir)
         ]
@@ -26,7 +27,6 @@ class LevelDataset(Dataset):
 
         self.transform = transform
         self.latent_size = latent_size
-        self.env = Env(env_name)
 
     def __len__(self):
         return self.data_length

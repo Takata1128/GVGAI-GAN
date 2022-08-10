@@ -1,14 +1,17 @@
+from __future__ import annotations
 import wandb
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 import os
 import torch
+import operator
 import numpy as np
+
 from . import loss
+from .env import Env
 from .level_visualizer import LevelVisualizer
 from .dataset import LevelDataset
 from .config import TrainingConfig
-from .models import Generator, Discriminator
 from .utils import (
     tensor_to_level_str,
     check_playable,
@@ -21,6 +24,7 @@ from .utils import (
 class Trainer:
     def __init__(self, config: TrainingConfig):
         self.config = config
+        self.env = Env(self.config.env_name, self.config.env_version)
 
         # reproducible settings
         np.random.seed(config.seed)
@@ -40,15 +44,14 @@ class Trainer:
         # Dataset
         train_dataset = LevelDataset(
             config.level_data_path,
-            config.env_name,
-            datamode="train",
+            self.env,
+            datamode=self.config.dataset_type,
             transform=None,
             latent_size=config.latent_size,
         )
 
         # dataset files
         self.dataset_files = os.listdir(train_dataset.image_dir)
-        self.index = 0
 
         print("Training Dataset :", train_dataset.image_dir)
 
@@ -58,81 +61,147 @@ class Trainer:
         )
 
         # Level Visualizer
-        self.level_visualizer = LevelVisualizer(
-            config.env_name, config.env_version)
+        self.level_visualizer = LevelVisualizer(self.env)
 
         # Network
-        latent_shape = (config.latent_size,)
-        self.generator = Generator(
-            out_dim=config.input_shape[0],
-            shapes=config.model_shapes,
-            z_shape=latent_shape,
-            filters=config.generator_filters,
-            is_self_attention=config.is_self_attention_g,
-            is_conditional=config.is_conditional,
-        ).to(self.device)
-        self.discriminator = Discriminator(
-            in_ch=config.input_shape[0],
-            shapes=config.model_shapes[::-1],
-            filters=config.discriminator_filters,
-            is_self_attention=config.is_self_attention_d,
-            is_minibatch_std=config.is_minibatch_std,
-            is_spectral_norm=config.is_spectral_norm,
-            is_conditional=config.is_conditional,
-        ).to(self.device)
+        self._build_model()
 
-        # check model summary
-        self.generator.summary(batch_size=self.config.train_batch_size)
-        self.discriminator.summary(batch_size=self.config.train_batch_size)
+        # Other
+        self.playability = 0
+        self.data_index = 0
+        self.steps_per_epoch = len(self.train_loader)
+        self.model_save_epoch = self.config.save_model_interval//(
+            self.config.train_batch_size*self.steps_per_epoch)
+        self.image_save_epoch = self.config.save_image_interval//(
+            self.config.train_batch_size*self.steps_per_epoch)
+        self.eval_epoch = self.config.eval_playable_interval//(
+            self.config.train_batch_size*self.steps_per_epoch)
+        print(f"model_save_epoch:{self.model_save_epoch}")
+        print(f"image_save_epoch:{self.image_save_epoch}")
+        print(f"eval_epoch:{self.eval_epoch}")
+
+    def _build_model(self):
+        latent_shape = (self.config.latent_size,)
+
+        if self.config.model_type == "branch":
+            from .branch_models import Generator
+            self.generator = Generator(
+                shape_channel=2,
+                object_channel=7,
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                is_self_attention=self.config.use_self_attention_g,
+                is_conditional=self.config.use_conditional,
+            ).to(self.device)
+        elif self.config.model_type == "simple":
+            from .simple_models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                use_self_attention=self.config.use_self_attention_g,
+                is_conditional=self.config.use_conditional,
+            ).to(self.device)
+        elif self.config.model_type == "small":
+            from.small_models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                use_conditional=self.config.use_conditional
+            ).to(self.device)
+        elif self.config.model_type == "only_sa":
+            from.sa_models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                use_self_attention=self.config.use_self_attention_g
+            ).to(self.device)
+        else:
+            from .models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+                is_self_attention=self.config.use_self_attention_g,
+                is_conditional=self.config.use_conditional,
+            ).to(self.device)
+
+        if self.config.model_type == 'simple':
+            from .simple_models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+                is_self_attention=self.config.use_self_attention_d,
+                is_minibatch_std=self.config.use_minibatch_std,
+                is_spectral_norm=self.config.use_spectral_norm,
+                is_conditional=self.config.use_conditional,
+                use_recon_loss=self.config.use_recon_loss,
+            ).to(self.device)
+        elif self.config.model_type == 'small':
+            from .small_models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+                use_minibatch_std=self.config.use_minibatch_std,
+                use_recon_loss=self.config.use_recon_loss,
+                use_conditional=self.config.use_conditional
+            )
+        elif self.config.model_type == 'only_sa':
+            from .sa_models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+                use_recon_loss=self.config.use_recon_loss
+            )
+        else:
+            from .models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+                is_self_attention=self.config.use_self_attention_d,
+                is_minibatch_std=self.config.use_minibatch_std,
+                is_spectral_norm=self.config.use_spectral_norm,
+                is_conditional=self.config.use_conditional,
+            ).to(self.device)
 
         # Optimizer
-        self.optimizer_g = torch.optim.Adam(
-            self.generator.parameters(), lr=config.generator_lr
+        self.optimizer_g = torch.optim.RMSprop(
+            self.generator.parameters(), lr=self.config.generator_lr
         )
-        self.optimizer_d = torch.optim.Adam(
-            self.discriminator.parameters(), lr=config.discriminator_lr
+        self.optimizer_d = torch.optim.RMSprop(
+            self.discriminator.parameters(), lr=self.config.discriminator_lr
         )
 
     def train(self):
         wandb.login()
         metrics = {}
         max_playable_count = 0
-        # summary(self.generator, (config.latent_size,), device=self.device)
-        # summary(self.discriminator, config.input_shape, device=self.device)
         with wandb.init(project=f"{self.config.env_name} Level GAN", config=self.config.__dict__):
+            # check model summary
+            self.generator.summary(batch_size=self.config.train_batch_size)
+            self.discriminator.summary(batch_size=self.config.train_batch_size)
+
             step = 0
             latents_for_show = torch.randn(
-                9,
-                self.config.latent_size,
-            ).to(self.device)
+                9, self.config.latent_size,).to(self.device)
             latents_for_eval = torch.randn(
                 self.config.eval_playable_counts,
                 self.config.latent_size,
             ).to(self.device)
-            labels_for_show = [
-                [100, 86, 1, 1, 1, 1, 1, 1],
-                [99, 87, 1, 1, 1, 1, 1, 1],
-                [87, 99, 1, 1, 1, 1, 1, 1],
-                [100, 86, 1, 1, 1, 1, 1, 1],
-                [100, 86, 1, 1, 1, 1, 1, 1],
-                [136, 50, 1, 1, 1, 1, 1, 1],
-                [50, 136, 1, 1, 1, 1, 1, 1],
-                [176, 10, 1, 1, 1, 1, 1, 1],
-                [10, 176, 1, 1, 1, 1, 1, 1],
-            ]
-            labels_for_show = (
-                torch.tensor(np.array(labels_for_show)).int().to(self.device)
-            )
-            labels_for_eval = []
-            for i in range(self.config.eval_playable_counts // 5):
-                labels_for_eval.append([100, 86, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([110, 76, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([120, 66, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([130, 56, 1, 1, 1, 1, 1, 1])
-                labels_for_eval.append([140, 46, 1, 1, 1, 1, 1, 1])
-            labels_for_eval = (
-                torch.tensor(np.array(labels_for_eval)).int().to(self.device)
-            )
+            labels_for_show = self._get_labels(9)
+            labels_for_eval = self._get_labels(
+                self.config.eval_playable_counts)
 
             # model_save_path
             model_save_path = os.path.join(
@@ -147,15 +216,15 @@ class Trainer:
                     latent, real, label = (
                         latent.to(self.device).float(),
                         real.to(self.device).float(),
-                        label.to(self.device).int(),
+                        label.to(self.device).float(),
                     )
-                    fake = self.generator(latent, label)
+                    fake_logit = self.generator(latent, label)
 
-                    Dx, DGz_d, discriminator_loss = self._discriminator_update(
-                        real, fake, label
+                    Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
+                        real, fake_logit, label
                     )
                     generator_loss, div_loss = self._generator_update(
-                        fake, label)
+                        fake_logit, label)
 
                     metrics["D(x)[Discriminator]"] = Dx
                     metrics["D(G(z))[Discriminator]"] = DGz_d
@@ -163,14 +232,17 @@ class Trainer:
                     metrics["Generator Loss"] = generator_loss
                     if self.config.div_loss != "none":
                         metrics["Generator Div Loss"] = div_loss
+                    if self.config.use_recon_loss:
+                        metrics["Reconstruction Loss"] = recon_loss
                     metrics["Epoch"] = epoch
                     wandb.log(metrics)
 
                     if step == self.config.steps:
                         break
 
-                if epoch % self.config.save_image_interval_epoch == 0:
-                    p_level = self.generator(latents_for_show, labels_for_show)
+                if epoch % self.image_save_epoch == 0:
+                    p_level = torch.nn.Softmax2d()(
+                        self.generator(latents_for_show, labels_for_show))
                     level_strs = tensor_to_level_str(
                         self.config.env_name, p_level)
                     p_level_img = [
@@ -182,22 +254,69 @@ class Trainer:
                         )
                         for lvl in level_strs
                     ]
-
                     grid_level_img = make_grid(p_level_img, nrow=3, padding=0)
                     images = wandb.Image(
                         grid_level_img, caption="generated levels")
                     wandb.log({"Generated Levels": images})
 
-                if epoch % self.config.eval_playable_interval_epoch == 0:
-                    p_level = self.generator(latents_for_eval, labels_for_eval)
+                    if self.config.use_recon_loss:
+                        _, recon = self.discriminator(real[:9], label[:9])
+                        real_level_strs = tensor_to_level_str(
+                            self.config.env_name, real[:9]
+                        )
+                        real_level_img = [
+                            torch.Tensor(
+                                np.array(self.level_visualizer.draw_level(lvl)).transpose(
+                                    2, 0, 1
+                                )
+                                / 255.0
+                            )
+                            for lvl in real_level_strs
+                        ]
+                        recon_level_strs = tensor_to_level_str(
+                            self.config.env_name, recon
+                        )
+                        recon_level_img = [
+                            torch.Tensor(
+                                np.array(self.level_visualizer.draw_level(lvl)).transpose(
+                                    2, 0, 1
+                                )
+                                / 255.0
+                            )
+                            for lvl in recon_level_strs
+                        ]
+                        real_level_img = make_grid(
+                            real_level_img, nrow=3, padding=0)
+                        recon_level_img = make_grid(
+                            recon_level_img, nrow=3, padding=0)
+                        images = wandb.Image(
+                            real_level_img, caption="real levels")
+                        wandb.log({"Real Levels": images})
+                        images = wandb.Image(
+                            recon_level_img, caption="reconstructed levels")
+                        wandb.log({"Reconstructed Levels": images})
+
+                if epoch % self.eval_epoch == 0:
+                    p_level = torch.softmax(
+                        self.generator(latents_for_eval, labels_for_eval), dim=1)
                     level_strs = tensor_to_level_str(
                         self.config.env_name, p_level)
-                    playable_count = 0
+                    playable_levels = []
                     for level_str in level_strs:
                         if check_playable(level_str):
-                            playable_count += 1
-                            if self.config.bootstrap:
-                                self._level_expand(level_str)
+                            playable_levels.append(level_str)
+
+                    if self.config.dataset_type == "train":
+                        for playable_level in playable_levels:
+                            with open(
+                                os.path.join(self.config.level_data_path,
+                                             self.config.env_name, "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
+                            ) as f:
+                                f.write(playable_level)
+                                self.data_index += 1
+
+                    if self.config.bootstrap and len(playable_levels) > 1:
+                        self._bootstrap(playable_levels)
 
                     (
                         level_similarity,
@@ -208,7 +327,7 @@ class Trainer:
 
                     wandb.log(
                         {
-                            "Playable Ratio": playable_count
+                            "Playable Ratio": len(playable_levels)
                             / self.config.eval_playable_counts
                         }
                     )
@@ -217,21 +336,88 @@ class Trainer:
                     wandb.log({"Shape Similarity Ratio": shape_similarity})
                     wandb.log({"Duplicate Ratio": duplicate_ratio})
 
-                    if playable_count > max_playable_count:
+                    if len(playable_levels) > max_playable_count:
                         self._save_models(
-                            model_save_path, epoch, playable_count)
-                        max_playable_count = playable_count
+                            model_save_path, epoch, len(playable_levels))
+                        max_playable_count = len(playable_levels)
+                        self.playability = max_playable_count / self.config.eval_playable_counts
+
+                    if len(playable_levels)/self.config.eval_playable_counts > self.config.recall_weight_threshold:
+                        print("recall")
+                        self._build_model()
 
                 if step == self.config.steps:
                     break
 
-    def _discriminator_update(self, real_images, fake_images, label=None):
+    # 生成データによる学習データ拡張 他との類似度が低いものを高いものと入れ替える
+    def _bootstrap(self, playable_levels: list[str]):
+        if self.config.bootstrap == "random":
+            for level in playable_levels:
+                self._level_expand(level)
+        elif self.config.bootstrap == "smart":
+            for i in range(len(playable_levels)):
+                key = 0
+                for j in range(len(playable_levels)):
+                    if i == j:
+                        continue
+                    key += check_level_similarity(
+                        playable_levels[i], playable_levels[j])
+                playable_levels[i] = [playable_levels[i], key]
+
+            playable_levels.sort(key=operator.itemgetter(1))
+
+            exchange_count = min(
+                self.config.dataset_max_change_count, len(playable_levels))
+
+            change_levels = []
+            for file in self.dataset_files:
+                with open(
+                    os.path.join(self.config.level_data_path,
+                                 self.config.env_name, self.config.dataset_type, file), mode="r"
+                ) as f:
+                    lvl_str = f.read()
+                change_levels.append([file, lvl_str])
+
+            for i in range(len(change_levels)):
+                key = 0
+                for j in range(len(change_levels)):
+                    if i == j:
+                        continue
+                    key += check_level_similarity(
+                        change_levels[i][1], change_levels[j][1])
+                change_levels[i].append(key)
+
+            change_levels.sort(
+                key=operator.itemgetter(1), reverse=True)
+
+            for i in range(exchange_count):
+                file = change_levels[i][0]
+                with open(
+                    os.path.join(self.config.level_data_path,
+                                 self.config.env_name, self.config.dataset_type, file), mode="w"
+                ) as f:
+                    f.write(playable_levels[i][0])
+        else:
+            pass
+
+    def _discriminator_update(self, real_images_logit, fake_images_logit, label=None):
         """
         update discriminator: maximize log(D(x)) + log(1-D(G(z)))
         """
         self.discriminator.zero_grad()
-        real_logits = self.discriminator(real_images, label).view(-1)
-        fake_logits = self.discriminator(fake_images.detach(), label).view(-1)
+        if self.config.use_recon_loss:
+            real_logits, real_recon = self.discriminator(
+                real_images_logit, label)
+            fake_logits, _ = self.discriminator(
+                torch.softmax(fake_images_logit, dim=1).detach(), label)
+            real_logits, fake_logits = real_logits.view(
+                -1), fake_logits.view(-1)
+        else:
+            real_logits = self.discriminator(
+                real_images_logit, label).view(-1)
+            fake_logits = self.discriminator(
+                torch.softmax(fake_images_logit, dim=1).detach(), label).view(-1)
+
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
                 real_logits, fake_logits, self.config.label_flip_prob)
@@ -241,27 +427,38 @@ class Trainer:
             )
         else:
             raise NotImplementedError()
-        loss_real.backward()
-        loss_fake.backward()
         discriminator_loss = loss_real + loss_fake
+
+        recon_loss_item = None
+        if self.config.use_recon_loss:
+            recon_loss = loss.recon_loss(real_recon, real_images_logit)
+            discriminator_loss += self.config.recon_lambda*recon_loss
+            recon_loss_item = recon_loss.item()
+        discriminator_loss.backward()
         self.optimizer_d.step()
 
-        return D_x, D_G_z, discriminator_loss.item()
+        return D_x, D_G_z, discriminator_loss.item(), recon_loss_item
 
-    def _generator_update(self, fake_images, label=None):
+    def _generator_update(self, fake_images_logit, label=None):
         """
         update generator: maximize log(D(G(z)))
         """
         self.generator.zero_grad()
-        fake_logits = self.discriminator(fake_images, label).view(-1)
+        if self.config.use_recon_loss:
+            fake_logits = self.discriminator(
+                torch.softmax(fake_images_logit, dim=1), label)[0].view(-1)
+        else:
+            fake_logits = self.discriminator(
+                torch.softmax(fake_images_logit, dim=1), label).view(-1)
         if self.config.adv_loss == "baseline":
             generator_loss = loss.g_loss(fake_logits)
         elif self.config.adv_loss == "hinge":
             generator_loss = loss.g_loss_hinge(fake_logits)
 
         div_loss = loss.div_loss(
-            fake_images, self.config.div_loss, self.config.lambda_div)
-        generator_loss += div_loss
+            torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
+        if self.playability > self.config.div_loss_threshold_playability:
+            generator_loss += div_loss
 
         generator_loss.backward()
         self.optimizer_g.step()
@@ -305,50 +502,33 @@ class Trainer:
         return (
             res_level / n_level,
             res_object / n_object_level if n_object_level > 0 else None,
-            res_shape / n_shape_level if n_object_level > 0 else None,
+            res_shape / n_shape_level if n_shape_level > 0 else None,
             res_duplicate / n_level,
         )
 
     def _level_expand(self, level_str):
-        file = self.dataset_files[self.index]
+        index = np.random.randint(0, len(self.dataset_files))
+        file = self.dataset_files[index]
         with open(
             os.path.join(self.config.level_data_path,
-                         self.config.env_name, "train", file),
+                         self.config.env_name, self.config.dataset_type, file),
             "w",
         ) as f:
             f.write(level_str)
 
-    # for df in [16, 32, 64]:
-    #     config = TrainingConfig()
-    #     config.discriminator_filters = df
-    #     prepare_dataset(
-    #         seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
-    #     )
-    #     trainer = GANTrainer(config)
-    #     trainer.train()
-
-    # for i in range(len(lambdas)):
-    #     for j in range(5):
-    #         config = TrainingConfig()
-    #         config.name = "L1-div-" + str(lambdas[i])
-    #         config.lambda_div = lambdas[i]
-    #         config.div_loss = "l1"
-    #         config.seed = j
-    #         prepare_dataset(
-    #             seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
-    #         )
-    #         trainer = GANTrainer(config)
-    #         trainer.train()
-
-    # for i in range(len(lambdas)):
-    #     for j in range(5):
-    #         config = TrainingConfig()
-    #         config.name = "L2-div-" + str(lambdas[i])
-    #         config.lambda_div = lambdas[i]
-    #         config.div_loss = "l2"
-    #         config.seed = j
-    #         prepare_dataset(
-    #             seed=config.seed, extend_data=config.extend_data, flip=config.flip_data
-    #         )
-    #         trainer = GANTrainer(config)
-    #         trainer.train()
+    def _get_labels(self, n_labels):
+        labels = []
+        for i in range(n_labels):
+            file = self.dataset_files[np.random.randint(
+                len(self.dataset_files))]
+            with open(os.path.join(self.config.level_data_path, self.config.env_name, self.config.dataset_type, file), "r") as f:
+                datalist = f.readlines()
+            # label : onehot vector of counts of map tile object.
+            label = np.zeros(len(self.env.ascii))
+            for i, s in enumerate(datalist):
+                for j, c in enumerate(s):
+                    if c == "\n":
+                        break
+                    label[self.env.ascii.index(c)] += 1
+            labels.append(label)
+        return torch.tensor(np.array(labels)).float().to(self.device)
