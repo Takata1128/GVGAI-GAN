@@ -9,22 +9,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, default="none")
     args = parser.parse_args()
+    # config = SmallModelConfig()
+    # config.set_env()
+    # if config.dataset_type == "train":
+    #     prepare_dataset(
+    #         seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #     )
+    # trainer = Trainer(config)
+    # trainer.train()
 
     div_loss = ['none', 'l1']
-    generator_filters = [64, 128]
-    discriminator_filters = [8, 16]
+    batch_sizes = [32, 64]
 
     for dl in div_loss:
-        for gf in generator_filters:
-            for df in discriminator_filters:
-                config = SmallModelConfig()
-                config.div_loss = dl
-                config.generator_filters = gf
-                config.discriminator_filters = df
-                config.set_env()
-                if config.dataset_type == "train":
-                    prepare_dataset(
-                        seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-                    )
-                trainer = Trainer(config)
-                trainer.train()
+        for bs in batch_sizes:
+            config = SmallModelConfig()
+            config.div_loss = dl
+            config.train_batch_size = bs
+            config.set_env()
+            if config.dataset_type == "train":
+                prepare_dataset(
+                    seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+                )
+            trainer = Trainer(config)
+            trainer.train()

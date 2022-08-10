@@ -7,7 +7,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, default="none")
     args = parser.parse_args()
-    config = OnlySAModelConfig
+    config = SmallModelConfig
     # config.env_name = 'aliens'
     config.set_env(config)
     # prepare_dataset(

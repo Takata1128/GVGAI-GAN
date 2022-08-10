@@ -177,7 +177,7 @@ class SmallModelConfig(TrainingConfig):
     # model define
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 64
-    discriminator_filters: int = 16
+    discriminator_filters: int = 64
     model_type: str = "small"  # "normal","simple","branch","small"
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
@@ -187,7 +187,7 @@ class SmallModelConfig(TrainingConfig):
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "l1"  # ["l1","l2","none"]
+    div_loss: str = "none"  # ["l1","l2","none"]
     lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 
@@ -198,6 +198,9 @@ class SmallModelConfig(TrainingConfig):
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0
+
+    generator_lr: float = 0.00005
+    discriminator_lr: float = 0.00005
 
     def set_env(self):
         env = Env(self.env_name, self.env_version)
