@@ -18,18 +18,37 @@ if __name__ == "__main__":
     # trainer = Trainer(config)
     # trainer.train()
 
-    dataset_types = ['generated_good', 'generated_part']
-    batch_sizes = [32, 64]
+    # latent_sizes = [32, 64]
+    # filters = [64, 128]
+    # self_atention = [True, False]
 
-    for ds in dataset_types:
-        for bs in batch_sizes:
-            config = SmallModelConfig()
-            config.dataset_type = ds
-            config.train_batch_size = bs
-            config.set_env()
-            if config.dataset_type == "train":
-                prepare_dataset(
-                    seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-                )
-            trainer = Trainer(config)
-            trainer.train()
+    # for ls in latent_sizes:
+    #     for filter in filters:
+    #         for sa in self_atention:
+    #             config = SmallModelConfig()
+    #             config.latent_sizes = ls
+    #             config.generator_filters = filter
+    #             config.discriminator_filters = filter
+    #             config.use_self_attention_d = sa
+    #             config.use_self_attention_g = sa
+    #             config.set_env()
+    #             trainer = Trainer(config)
+    #             trainer.train()
+
+    use_minibatch_std = [False, True]
+    use_conditional = [False, True]
+    use_recon_loss = [False, True]
+    adv_losses = ["baseline", "hinge"]
+
+    for mstd in use_minibatch_std:
+        for uc in use_conditional:
+            for rec in use_recon_loss:
+                for loss in adv_losses:
+                    config = SmallModelConfig()
+                    config.use_minibatch_std = mstd
+                    config.use_recon_loss = rec
+                    config.use_conditional = uc
+                    config.adv_loss = loss
+                    config.set_env()
+                    trainer = Trainer(config)
+                    trainer.train()

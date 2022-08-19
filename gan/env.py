@@ -89,16 +89,18 @@ class Env:
                 lvl_strs.append(content)
         return lvl_strs
 
-    def level_strs_to_ndarray(self, strs: list[str]):
+    def level_str_to_ndarray(self, lvl_str: str):
         ret = np.zeros(
             (len(self.ascii),
              self.state_shape[1], self.state_shape[2]),
         )
-        for i, s in enumerate(strs):
-            for j, c in enumerate(s):
-                if c == "\n":
-                    break
-                ret[self.ascii.index(c), i, j] = 1
+        index = 0
+        for i, c in enumerate(lvl_str):
+            if c == "\n":
+                continue
+            ret[self.ascii.index(c), index//self.state_shape[2],
+                index % self.state_shape[2]] = 1
+            index += 1
         return ret
 
     def level_tensor_to_strs(self, tensor):

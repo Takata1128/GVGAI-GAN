@@ -112,7 +112,7 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
 
     states = []
     for i, lvl_str in enumerate(lvl_strs):
-        state_numpy = visualizer.game.level_strs_to_ndarray(lvl_str)
+        state_numpy = visualizer.game.level_str_to_ndarray(lvl_str)
         state_tensor = torch.unsqueeze(torch.Tensor(state_numpy), 0)
         states.append(state_tensor)
         # lvl_str_re = visualizer.game.level_tensor_to_strs(state_tensor)
