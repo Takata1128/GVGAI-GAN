@@ -81,15 +81,15 @@ class Env:
         dir_path = os.path.join(
             gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}")
         file_pathes = glob(dir_path+"/*")
-        lvl_strs = []
+        levels = []
         for f_name in file_pathes:
             if f_name == os.path.join(
                     gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}", f"{self.name}.txt"):
                 continue
             with open(f_name, 'r') as f:
-                content = f.readlines()
-                lvl_strs.append(content)
-        return lvl_strs
+                content = f.read()
+            levels.append(content)
+        return levels
 
     def level_str_to_ndarray(self, lvl_str: str):
         ret = np.zeros(
