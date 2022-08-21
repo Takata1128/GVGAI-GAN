@@ -160,14 +160,8 @@ class Agent:
         self.rollouts.to(self.device)
 
         # エピソード報酬計算用
+        episode_rewards = np.zeros(self.num_processes)
         episode_rewards_deque = deque(maxlen=30)
-
-        # 各ワーカの初期状態
-        initial_state_worker = [None for i in range(self.num_processes)]
-
-        # 各ワーカの次が初期状態かどうか
-        is_next_initial_state_worker = [
-            True for i in range(self.num_processes)]
 
         start = time.time()
         num_updates = int(
@@ -203,17 +197,11 @@ class Agent:
                     # Obser reward and next obs
                     obs, reward, done, infos = self.envs.step(action)
 
-                    # 観測状態が初期状態のとき、保存しておく
                     for i in range(self.num_processes):
-                        if is_next_initial_state_worker[i]:
-                            initial_state_worker[i] = obs
-
-                    # 次が初期状態かどうかはdoneと同じ
-                    is_next_initial_state_worker = done
-
-                    for i, info in enumerate(infos):
-                        if "episode" in info.keys():
-                            episode_rewards_deque.append(info["episode"]["r"])
+                        episode_rewards[i] += reward[i]
+                        if done[i]:
+                            episode_rewards_deque.append(episode_rewards[i])
+                            episode_rewards[i] = 0
 
                     # If done then clean the history of observations.
                     masks = torch.FloatTensor(

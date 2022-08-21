@@ -23,10 +23,10 @@ from gan.env import Env
 def make_env(env_def, path, seed, rank, log_dir, allow_early_resets, **env_kwargs):
     def _thunk():
         env = GridGame(
-            game=env_def.name,
+            game_name=env_def.name,
             play_length=200,
             shape=env_def.state_shape,
-            path=path,
+            levels_dir_path=path,
             id=rank
         )
         return env
@@ -60,27 +60,26 @@ def make_vec_envs(
 class GridGame(gym.Wrapper):
     def __init__(
         self,
-        game,
+        game_name,
         play_length,
         shape,
-        path=None,
+        levels_dir_path=None,
         id=0,
         reward_mode="bonus",
         reward_scale=1.0,
         elite_prob=0,
     ):
         self.id = id
-        self.name = game
+        self.name = game_name
         self.setting = Env(self.name)
-        self.levels_dir = path
+        self.levels_dir = levels_dir_path
 
         self.level_id = -1
         self.version = 1
         self.env = gym_gvgai.make(
-            "gvgai-{}-lvl0-v{}".format(game, self.version))
+            "gvgai-{}-lvl0-v{}".format(game_name, self.version))
         gym.Wrapper.__init__(self, self.env)
 
-        self.compiles = False
         self.state = None
         self.steps = 0
         self.score = 0
@@ -101,6 +100,7 @@ class GridGame(gym.Wrapper):
         self.steps = 0
         self.score = 0
         self.keyget = False
+        self.env.reset()
         if self.levels_dir is not None:
             state = self.set_level(
                 os.path.join(self.levels_dir,
@@ -110,11 +110,20 @@ class GridGame(gym.Wrapper):
             state = self.set_level()
         return state
 
+    def set_level_reset(self, level_str: str):
+        self.steps = 0
+        self.score = 0
+        self.keyget = False
+        self.env.reset()
+        level_path = f'/var/tmp/{self.id}'
+        with open(level_path, mode='w') as f:
+            f.write(level_str)
+        state = self.set_level(level_path)
+        return state
+
     def step(self, action):
         if not isinstance(action, int):
             action = action.item()
-        if not self.compiles:
-            return self.state, -self.rscale * 2.0, True, {}
         _, r, done, info = self.env.step(action)
 
         # タイムアップ
@@ -141,7 +150,9 @@ class GridGame(gym.Wrapper):
         state = self.get_state(info["grid"])
         self.steps += 1
         self.score += reward
-        return state, reward, done, {"ascii": info["ascii"]}
+        if "episode" in info.keys():
+            info["episode"]["r"] = self.score
+        return state, reward, done, info
 
     def get_bonus_reward(self, isOver, winner, keyget):
         reward = 0
@@ -184,6 +195,7 @@ class GridGame(gym.Wrapper):
     def get_state(self, grid):
         state = self.pad(grid)
         state = self.background(state)
+        state = self.mapping(state)
         self.state = state.astype("float32")
         return state
 
@@ -200,6 +212,16 @@ class GridGame(gym.Wrapper):
             """テキストファイルからレベル生成"""
             with open(lvl) as f:
                 lvl_str = f.read()
+            try:
+                self.env.unwrapped._setLevel(lvl)
+                self.test_level()
+            except Exception as e:
+                self.env.reset()
+            except SystemExit:
+                print("SystemExit")
+                self.restart(
+                    "SystemExit", os.path.splitext(os.path.basename(lvl))[0]
+                )
             state = self.setting.level_str_to_ndarray(lvl_str)
             self.level_id = int(re.sub(r"\D", "", os.path.basename(lvl)))
         else:
@@ -248,6 +270,12 @@ class GridGame(gym.Wrapper):
         background = 1 - np.clip(np.sum(state, 0), 0, 1)
         background = np.expand_dims(background, 0)
         return np.concatenate([state, background])
+
+    def mapping(self, state):
+        ret = np.zeros(self.setting.state_shape)
+        for i, e in enumerate(self.setting.mapping):
+            ret[i] = state[e]
+        return ret
 
     def restart(self, e, path):
         # self.log(e)

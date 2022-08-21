@@ -33,6 +33,7 @@ GameDescription["zelda"] = {
         "monsterSlow": ["floor", "monsterSlow"],
         "wall": ["wall"],
     },
+    "mapping": [13, 0, 3, 4, 10, 11, 12, 7],
     "state_shape": (8, 12, 16),
     "model_shape": [(3, 4), (6, 8), (12, 16)],
     "requirements": ["A", "g", "+"],
@@ -66,6 +67,7 @@ class Env:
         self.version = version
         try:
             self.ascii = GameDescription[name]["ascii"]
+            self.mapping = GameDescription[name]['mapping']
             self.state_shape = GameDescription[name]["state_shape"]
             self.model_shape = GameDescription[name]["model_shape"]
             self.requirements = GameDescription[name]["requirements"]

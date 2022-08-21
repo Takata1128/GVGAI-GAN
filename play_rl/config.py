@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class Config:
     project: str = "Zelda PPO Reinforcement Training"
 
-    model_save_dir: str = "/root/mnt/pcg/GVGAI-GAN/play_rl/checkpoints"
+    model_save_dir: str = "/root/mnt/GVGAI-GAN/play_rl/checkpoints"
     log_dir: str = "log"
     cuda: bool = True
     num_steps: int = 128
@@ -15,7 +15,7 @@ class Config:
     seed: int = 0
     algo_name: str = "ppo"
     checkpoint = None
-    num_processes: int = 4
+    num_processes: int = 16
     gamma: float = 0.99
     recurrent_policy: bool = True
     value_loss_coef: float = 0.5
@@ -27,7 +27,7 @@ class Config:
     ppo_epoch: int = 4
     num_mini_batch: int = 4
     alpha: float = 0.99
-    level_path: str = "/root/mnt/pcg/GVGAI-GAN/gan/data/level/zelda/generated_good"
+    level_path: str = "/root/mnt/GVGAI-GAN/gan/data/level/zelda/generated_good"
 
     save_interval: int = 100
     log_interval: int = 10
