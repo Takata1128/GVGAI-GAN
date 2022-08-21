@@ -46,8 +46,8 @@ class TrainingConfig:
     train_batch_size: int = 64  # training batch size
     steps: int = 50000  # training steps
 
-    generator_lr: float = 0.0001
-    discriminator_lr: float = 0.0001
+    generator_lr: float = 0.00005
+    discriminator_lr: float = 0.00005
     epochs: int = 1000000  # training epochs
     label_flip_prob: float = 0.0  # prob of flipping real label
     save_image_interval: int = 50000  # save images interval
@@ -81,12 +81,12 @@ class DataExtendConfig(TrainingConfig):
     dataset_type: str = "train"  # [train, generated]
 
     # model define
-    latent_size: int = 128  # latent dims for generation
-    generator_filters: int = 256
+    latent_size: int = 64  # latent dims for generation
+    generator_filters: int = 64
     discriminator_filters: int = 16
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
-    model_type: str = "normal"  # "normal","simple","branch","small"
+    model_type: str = "small"  # "normal","simple","branch","small"
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
     use_minibatch_std: bool = False
@@ -99,16 +99,19 @@ class DataExtendConfig(TrainingConfig):
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "none"  # ["l1","l2","none"]
+    div_loss: str = "l1"  # ["l1","l2","none"]
     lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 
-    train_batch_size: int = 64  # training batch size
+    use_recon_loss: bool = False
+    recon_lambda: float = 1.0
+
+    train_batch_size: int = 32  # training batch size
     steps: int = 500000  # training steps
 
     recall_weight_threshold: float = 0.05
 
-    bootstrap: str = "none"  # ["none", "random", "smart"]
+    bootstrap: str = "smart"  # ["none", "random", "smart"]
     dataset_max_change_count: int = 3
 
 
