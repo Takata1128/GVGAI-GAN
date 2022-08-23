@@ -35,8 +35,8 @@ class Trainer:
 
         if config.cuda:
             self.device = torch.device(
-                "cuda" if torch.cuda.is_available else "cpu")
-            print("device : cuda")
+                f"cuda:{config.gpu_id}" if torch.cuda.is_available else "cpu")
+            print(f"device : cuda:{config.gpu_id}")
         else:
             self.device = torch.device("cpu")
             print("device : cpu")
@@ -105,16 +105,17 @@ class Trainer:
                 is_conditional=self.config.use_conditional,
             ).to(self.device)
         elif self.config.model_type == "small":
-            from.small_models import Generator
+            from .small_models import Generator
             self.generator = Generator(
                 out_dim=self.config.input_shape[0],
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
                 filters=self.config.generator_filters,
-                use_conditional=self.config.use_conditional
+                use_conditional=self.config.use_conditional,
+                use_deconv_g=self.config.use_deconv_g
             ).to(self.device)
         elif self.config.model_type == "only_sa":
-            from.sa_models import Generator
+            from .sa_models import Generator
             self.generator = Generator(
                 out_dim=self.config.input_shape[0],
                 shapes=self.config.model_shapes,
@@ -154,7 +155,7 @@ class Trainer:
                 use_minibatch_std=self.config.use_minibatch_std,
                 use_recon_loss=self.config.use_recon_loss,
                 use_conditional=self.config.use_conditional
-            )
+            ).to(self.device)
         elif self.config.model_type == 'only_sa':
             from .sa_models import Discriminator
             self.discriminator = Discriminator(
@@ -162,7 +163,7 @@ class Trainer:
                 shapes=self.config.model_shapes[::-1],
                 filters=self.config.discriminator_filters,
                 use_recon_loss=self.config.use_recon_loss
-            )
+            ).to(self.device)
         else:
             from .models import Discriminator
             self.discriminator = Discriminator(
@@ -190,7 +191,12 @@ class Trainer:
         with wandb.init(project=f"{self.config.env_name} Level GAN", config=self.config.__dict__):
             # check model summary
             self.generator.summary(batch_size=self.config.train_batch_size)
-            self.discriminator.summary(batch_size=self.config.train_batch_size)
+            self.discriminator.summary(
+                batch_size=self.config.train_batch_size)
+
+            # summaryによってdeviceが飛んでいるので注意
+            self.generator.to(self.device)
+            self.discriminator.to(self.device)
 
             step = 0
             latents_for_show = torch.randn(
@@ -218,6 +224,7 @@ class Trainer:
                         real.to(self.device).float(),
                         label.to(self.device).float(),
                     )
+                    d = next(self.generator.parameters()).device
                     fake_logit = self.generator(latent, label)
 
                     Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
@@ -336,11 +343,11 @@ class Trainer:
                     wandb.log({"Shape Similarity Ratio": shape_similarity})
                     wandb.log({"Duplicate Ratio": duplicate_ratio})
 
-                    if len(playable_levels) > max_playable_count:
-                        self._save_models(
-                            model_save_path, epoch, len(playable_levels))
-                        max_playable_count = len(playable_levels)
-                        self.playability = max_playable_count / self.config.eval_playable_counts
+                    # if len(playable_levels) > max_playable_count:
+                    self._save_models(
+                        model_save_path, epoch, len(playable_levels))
+                    max_playable_count = len(playable_levels)
+                    self.playability = max_playable_count / self.config.eval_playable_counts
 
                     if len(playable_levels)/self.config.eval_playable_counts > self.config.recall_weight_threshold:
                         print("recall")
@@ -472,7 +479,7 @@ class Trainer:
                 "generator": self.generator.state_dict(),
                 "discriminator": self.discriminator.state_dict(),
             },
-            os.path.join(model_save_path, "models.tar"),
+            os.path.join(model_save_path, f"models_{epoch}.tar"),
         )
 
     def _calc_level_similarity(self, level_strs):

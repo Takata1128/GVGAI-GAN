@@ -265,7 +265,7 @@ class Generator(nn.Module):
         self.outconv = nn.Sequential(
             Resize(shapes[-1]),
             nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=True),
-            Self_Attn(out_ch)  # additional
+            # Self_Attn(out_ch)  # additional
         )
 
     def forward(self, z, label=None):

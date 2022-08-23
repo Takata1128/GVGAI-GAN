@@ -132,30 +132,36 @@ class Generator(nn.Module):
         shapes: list[tuple[int]],
         z_shape,
         filters=64,
-        use_conditional=False
+        use_conditional=False,
+        use_deconv_g=True
     ):
         super(Generator, self).__init__()
         self.z_size = z_shape[0]
-        self.init_filters = filters
+        self.filters = filters
         self.init_shape = shapes[0]
         self.use_conditional = use_conditional
+        self.use_deconv_g = use_deconv_g
         self.out_dim = out_dim
 
-        # self.preprocess = nn.Linear(
-        #     self.z_size, mul(filters*4, mul(*self.init_shape)))
-        self.preprocess = nn.Sequential(
-            nn.ConvTranspose2d(self.z_size, filters*4,
-                               self.init_shape, 1, 0, bias=False),
-            nn.BatchNorm2d(filters*4),
-            nn.ReLU(True)
-        )
+        if use_deconv_g:
+            self.preprocess = nn.Sequential(
+                nn.ConvTranspose2d(self.z_size, filters*4,
+                                   self.init_shape, 1, 0, bias=False),
+                nn.BatchNorm2d(filters*4),
+                nn.ReLU(True)
+            )
+        else:
+            self.preprocess = nn.Sequential(
+                nn.Linear(self.z_size, mul(filters*4, mul(*self.init_shape))),
+                nn.ReLU(),
+            )
 
         self.block1 = GenBlock(
-            filters*4, filters*2, True
+            filters*4, filters*2, use_deconv_g
         )
         self.self_attn0 = Self_Attn(filters*2)
         self.block2 = GenBlock(
-            filters*2, filters, True
+            filters*2, filters, use_deconv_g
         )
         if self.use_conditional:
             self.self_attn = ConditionalSelfAttention(
@@ -167,9 +173,12 @@ class Generator(nn.Module):
                                                kernel_size=1, stride=1), nn.ReLU())
 
     def forward(self, z, label=None):
-        x = z.view(-1, self.z_size, 1, 1)
-        x = self.preprocess(x)
-        # x = x.view(-1, self.init_filters, *self.init_shape)
+        if self.use_deconv_g:
+            x = z.view(-1, self.z_size, 1, 1)
+            x = self.preprocess(x)
+        else:
+            x = self.preprocess(z)
+            x = x.view(-1, self.filters*4, *self.init_shape)
         x = self.block1(x)
         x = self.self_attn0(x)
         x = self.block2(x)
@@ -217,7 +226,8 @@ class Discriminator(nn.Module):
             filters+int(self.use_conditional), filters*2, use_bn=False)
         self.self_attn0 = Self_Attn(filters*2)
         self.block2 = DisBlock(filters*2, filters*4, use_bn=False)
-        self.decoder = Decoder(filters*4, self.input_ch)
+        if self.use_recon_loss:
+            self.decoder = Decoder(filters*4, self.input_ch)
 
         if self.use_minibatch_std:
             self.minibatch_std = MiniBatchStd()

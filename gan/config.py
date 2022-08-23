@@ -33,6 +33,7 @@ class TrainingConfig:
     model_type: str = "small"  # "normal","simple","branch","small"
     use_self_attention_g: bool = False
     use_self_attention_d: bool = False
+    use_deconv_g: bool = True
     use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
@@ -60,6 +61,7 @@ class TrainingConfig:
     # others parameters
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
+    gpu_id: int = 1  # gpu index
 
     eval_playable_counts: int = 300  # number of z to check playable.
     clone_data: bool = False
@@ -81,35 +83,40 @@ class DataExtendConfig(TrainingConfig):
     dataset_type: str = "train"  # [train, generated]
 
     # model define
-    latent_size: int = 64  # latent dims for generation
-    generator_filters: int = 64
+    latent_size: int = 32  # latent dims for generation
+    generator_filters: int = 256
     discriminator_filters: int = 16
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
-    model_type: str = "small"  # "normal","simple","branch","small"
+    model_type: str = "normal"  # "normal","simple","branch","small"
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
+    use_deconv_g: bool = False
     use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
 
-    save_image_interval_epoch: int = 300  # save images interval
+    save_image_interval_epoch: int = 100  # save images interval
     save_model_interval_epoch: int = 5000  # save models interval
-    eval_playable_interval_epoch: int = 300  # check playable interval
+    eval_playable_interval_epoch: int = 100  # check playable interval
 
     # learning parameters
-    adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "l1"  # ["l1","l2","none"]
+    adv_loss: str = "baseline"  # ["baseline","hinge"]
+    div_loss: str = "none"  # ["l1","l2","none"]
     lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
 
-    train_batch_size: int = 32  # training batch size
-    steps: int = 500000  # training steps
+    train_batch_size: int = 64  # training batch size
+    steps: int = 100000  # training steps
 
     recall_weight_threshold: float = 0.05
+
+    save_image_interval: int = 20000  # save images interval
+    save_model_interval: int = 1000000  # save models interval
+    eval_playable_interval: int = 20000  # check playable interval
 
     bootstrap: str = "smart"  # ["none", "random", "smart"]
     dataset_max_change_count: int = 3
@@ -175,7 +182,7 @@ class BranchModelConfig(TrainingConfig):
 
 @dataclass
 class SmallModelConfig(TrainingConfig):
-    dataset_type: str = "generated_good"  # [train, generated]
+    dataset_type: str = "generated"  # [train, generated]
 
     # model define
     latent_size: int = 32  # latent dims for generation
@@ -187,6 +194,7 @@ class SmallModelConfig(TrainingConfig):
     use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
+    use_linear_z_upsample: bool = True
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
