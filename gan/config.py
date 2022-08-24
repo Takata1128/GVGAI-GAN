@@ -61,7 +61,7 @@ class TrainingConfig:
     # others parameters
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
-    gpu_id: int = 1  # gpu index
+    gpu_id: int = 0  # gpu index
 
     eval_playable_counts: int = 300  # number of z to check playable.
     clone_data: bool = False
@@ -191,10 +191,10 @@ class SmallModelConfig(TrainingConfig):
     model_type: str = "small"  # "normal","simple","branch","small"
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
-    use_minibatch_std: bool = False
+    use_deconv_g: bool = True
+    use_minibatch_std: bool = True
     use_spectral_norm: bool = False
     use_conditional: bool = False
-    use_linear_z_upsample: bool = True
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
