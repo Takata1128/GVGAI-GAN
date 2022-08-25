@@ -125,86 +125,7 @@ class DisBlock(nn.Module):
         return x
 
 
-class Generator(nn.Module):
-    def __init__(
-        self,
-        out_dim: int,
-        shapes: list[tuple[int]],
-        z_shape,
-        filters=64,
-        use_self_attention=True,
-        use_conditional=False,
-        use_deconv_g=True
-    ):
-        super(Generator, self).__init__()
-        self.z_size = z_shape[0]
-        self.filters = filters
-        self.init_shape = shapes[0]
-        self.use_self_attention = use_self_attention
-        self.use_conditional = use_conditional
-        self.use_deconv_g = use_deconv_g
-        self.out_dim = out_dim
-
-        if use_deconv_g:
-            self.preprocess = nn.Sequential(
-                nn.ConvTranspose2d(self.z_size, filters*4,
-                                   self.init_shape, 1, 0, bias=False),
-                nn.BatchNorm2d(filters*4),
-                nn.ReLU(True)
-            )
-        else:
-            self.preprocess = nn.Sequential(
-                nn.Linear(self.z_size, mul(filters*4, mul(*self.init_shape))),
-                nn.ReLU(),
-            )
-
-        self.block1 = GenBlock(
-            filters*4, filters*2, use_deconv_g
-        )
-
-        if self.use_self_attention:
-            self.self_attn1 = Self_Attn(filters*2)
-
-        self.block2 = GenBlock(
-            filters*2, filters, use_deconv_g
-        )
-        if self.use_conditional:
-            self.self_attn2 = ConditionalSelfAttention(
-                filters, shapes[-1], out_dim)
-        elif self.use_self_attention:
-            self.self_attn2 = Self_Attn(filters)
-
-        self.outconv = nn.Sequential(nn.Conv2d(filters+int(self.use_conditional), out_dim,
-                                               kernel_size=1, stride=1), nn.ReLU())
-
-    def forward(self, z, label=None):
-        if self.use_deconv_g:
-            x = z.view(-1, self.z_size, 1, 1)
-            x = self.preprocess(x)
-        else:
-            x = self.preprocess(z)
-            x = x.view(-1, self.filters*4, *self.init_shape)
-        x = self.block1(x)
-
-        if self.use_self_attention:
-            x = self.self_attn1(x)
-        x = self.block2(x)
-        if self.use_conditional:
-            x = self.self_attn2(x, label)
-        elif self.use_self_attention:
-            x = self.self_attn2(x)
-        x = self.outconv(x)
-        return x
-
-    def summary(self, batch_size=32):
-        if self.use_conditional:
-            summary(self, ((batch_size, self.z_size),
-                    (batch_size, self.out_dim)))
-        else:
-            summary(self, (batch_size, self.z_size),)
-
-
-class Discriminator(nn.Module):
+class SurrogateModel(nn.Module):
     def __init__(
         self,
         in_ch,
@@ -212,25 +133,18 @@ class Discriminator(nn.Module):
         filters=64,
         use_bn=False,
         use_self_attention=True,
-        use_minibatch_std=False,
-        use_recon_loss=False,
-        use_conditional=False
+        use_recon_loss=False
     ):
-        super(Discriminator, self).__init__()
-        self.use_minibatch_std = use_minibatch_std
+        super(SurrogateModel, self).__init__()
         self.use_recon_loss = use_recon_loss
         self.use_self_attention = use_self_attention
-        self.use_conditional = use_conditional
         self.input_ch = in_ch
         self.input_shape = shapes[0]
         self.preprocess = nn.Sequential(
             nn.Conv2d(in_ch, filters, 1, stride=1, bias=True),
             nn.LeakyReLU(0.2, True),
         )
-        if self.use_conditional:
-            self.self_attn1 = ConditionalSelfAttention(
-                filters, self.input_shape, self.input_ch)
-        elif self.use_self_attention:
+        if self.use_self_attention:
             self.self_attn1 = Self_Attn(filters)
 
         self.block1 = DisBlock(
@@ -244,18 +158,13 @@ class Discriminator(nn.Module):
         if self.use_recon_loss:
             self.decoder = Decoder(filters*4, self.input_ch)
 
-        if self.use_minibatch_std:
-            self.minibatch_std = MiniBatchStd()
-
         self.postprocess = nn.Conv2d(
-            filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0, bias=False)
+            filters*4, 1, shapes[-1], 1, 0, bias=False)
 
     def forward(self, x, label=None):
         x = self.preprocess(x)
 
-        if self.use_conditional:
-            x = self.self_attn1(x, label)
-        elif self.use_self_attention:
+        if self.use_self_attention:
             x = self.self_attn1(x)
 
         x = self.block1(x)
@@ -266,9 +175,6 @@ class Discriminator(nn.Module):
         x = self.block2(x)
 
         branch_x = x
-
-        if self.use_minibatch_std:
-            x = self.minibatch_std(x)
 
         x = self.postprocess(x)
 

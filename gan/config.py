@@ -34,6 +34,7 @@ class TrainingConfig:
     use_self_attention_g: bool = False
     use_self_attention_d: bool = False
     use_deconv_g: bool = True
+    use_bn_d: bool = False
     use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
@@ -92,6 +93,7 @@ class DataExtendConfig(TrainingConfig):
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
     use_deconv_g: bool = False
+    use_bn_d: bool = False
     use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
@@ -186,12 +188,13 @@ class SmallModelConfig(TrainingConfig):
 
     # model define
     latent_size: int = 32  # latent dims for generation
-    generator_filters: int = 64
-    discriminator_filters: int = 64
+    generator_filters: int = 128
+    discriminator_filters: int = 128
     model_type: str = "small"  # "normal","simple","branch","small"
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
     use_deconv_g: bool = True
+    use_bn_d: bool = False
     use_minibatch_std: bool = True
     use_spectral_norm: bool = False
     use_conditional: bool = False
@@ -205,7 +208,11 @@ class SmallModelConfig(TrainingConfig):
     bootstrap: str = "none"  # ["none", "random", "smart"]
 
     train_batch_size: int = 32  # training batch size
-    steps: int = (int)(150000*(train_batch_size/32))  # training steps
+    steps: int = 50000*(train_batch_size//32)  # training steps
+
+    save_image_interval: int = 1000*32  # save images interval
+    save_model_interval: int = 5000*32  # save models interval
+    eval_playable_interval: int = 1000*32  # check playable interval
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0

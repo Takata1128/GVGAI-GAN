@@ -111,6 +111,7 @@ class Trainer:
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
                 filters=self.config.generator_filters,
+                use_self_attention=self.config.use_self_attention_g,
                 use_conditional=self.config.use_conditional,
                 use_deconv_g=self.config.use_deconv_g
             ).to(self.device)
@@ -152,6 +153,8 @@ class Trainer:
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
                 filters=self.config.discriminator_filters,
+                use_bn=self.config.use_bn_d,
+                use_self_attention=self.config.use_self_attention_d,
                 use_minibatch_std=self.config.use_minibatch_std,
                 use_recon_loss=self.config.use_recon_loss,
                 use_conditional=self.config.use_conditional
@@ -343,17 +346,19 @@ class Trainer:
                     wandb.log({"Shape Similarity Ratio": shape_similarity})
                     wandb.log({"Duplicate Ratio": duplicate_ratio})
 
-                    # if len(playable_levels) > max_playable_count:
-                    self._save_models(
-                        model_save_path, epoch, len(playable_levels))
-                    max_playable_count = len(playable_levels)
-                    self.playability = max_playable_count / self.config.eval_playable_counts
+                    if len(playable_levels) > max_playable_count:
+                        max_playable_count = len(playable_levels)
+                        self.playability = max_playable_count / self.config.eval_playable_counts
 
                     if len(playable_levels)/self.config.eval_playable_counts > self.config.recall_weight_threshold:
                         print("recall")
                         self._build_model()
 
-                if step == self.config.steps:
+                if epoch % self.model_save_epoch == 0:
+                    self._save_models(
+                        model_save_path, epoch, None)
+
+                if step >= self.config.steps:
                     break
 
     # 生成データによる学習データ拡張 他との類似度が低いものを高いものと入れ替える

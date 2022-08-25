@@ -22,6 +22,19 @@ if __name__ == "__main__":
     trainer = Trainer(config)
     trainer.train()
 
+    config = SmallModelConfig()
+    config.set_env()
+    config.use_self_attention_g = False
+    config.use_self_attention_d = False
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.use_conditional = True
+    trainer = Trainer(config)
+    trainer.train()
+
     # latent_sizes = [32, 64]
     # filters = [64, 128]
     # self_atention = [True, False]
