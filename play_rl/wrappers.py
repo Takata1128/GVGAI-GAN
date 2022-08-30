@@ -17,14 +17,14 @@ import a2c_ppo_acktr.envs as torch_env
 from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 
-from gan.env import Env
+from .env import Env
 
 
 def make_env(env_def, path, seed, rank, log_dir, allow_early_resets, **env_kwargs):
     def _thunk():
         env = GridGame(
             game_name=env_def.name,
-            play_length=200,
+            play_length=100,
             shape=env_def.state_shape,
             levels_dir_path=path,
             id=rank
@@ -80,7 +80,6 @@ class GridGame(gym.Wrapper):
             "gvgai-{}-lvl0-v{}".format(game_name, self.version))
         gym.Wrapper.__init__(self, self.env)
 
-        self.state = None
         self.steps = 0
         self.score = 0
         self.play_length = play_length
@@ -130,18 +129,21 @@ class GridGame(gym.Wrapper):
         if self.steps >= self.play_length:
             done = True
 
+        # ステップのペナルティ
+        reward = -0.01
+
         # 報酬設計
         if self.rmode == "base":
-            reward = self.get_reward(done, info["winner"], r)
+            reward += self.get_reward(done, info["winner"], r)
         elif self.rmode == "time":
-            reward = self.get_time_reward(done, info["winner"], r)
+            reward += self.get_time_reward(done, info["winner"], r)
         elif self.rmode == "bonus":
             # 鍵をとったときボーナス
             keyget = False
             if not self.keyget and r == 1.0:
                 self.keyget = True
                 keyget = True
-            reward = self.get_bonus_reward(done, info["winner"], keyget)
+            reward += self.get_bonus_reward(done, info["winner"], keyget)
         elif self.rmode == None:
             reward = r
         else:
@@ -161,7 +163,7 @@ class GridGame(gym.Wrapper):
                 reward = self.rscale * 2.0
             elif winner == "PLAYER_LOSES":  # 敵にやられる
                 reward = 0
-            else:  # タイムアップ or 外に出る
+            else:  # タイムアップ
                 reward = -self.rscale
         if keyget:  # 鍵GET
             reward = self.rscale
@@ -193,11 +195,9 @@ class GridGame(gym.Wrapper):
             return 0
 
     def get_state(self, grid):
-        state = self.pad(grid)
-        state = self.background(state)
-        state = self.mapping(state)
-        self.state = state.astype("float32")
-        return state
+        # state = self.pad(grid)
+        # state = self.background(state)
+        return grid.astype("float32")
 
     def set_level(self, lvl=None):
         if lvl is not None and isinstance(lvl, int):
@@ -222,7 +222,8 @@ class GridGame(gym.Wrapper):
                 self.restart(
                     "SystemExit", os.path.splitext(os.path.basename(lvl))[0]
                 )
-            state = self.setting.level_str_to_ndarray(lvl_str)
+            s, _, _, info = self.env.step(0)
+            state = self.get_state(info["grid"])
             self.level_id = int(re.sub(r"\D", "", os.path.basename(lvl)))
         else:
             """既存ステージからランダムに生成"""
@@ -233,7 +234,6 @@ class GridGame(gym.Wrapper):
             self.env.reset()
             _, _, _, info = self.env.step(0)
             state = self.get_state(info["grid"])
-        self.state = state
         return state
 
     def log(self, text):

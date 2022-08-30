@@ -15,7 +15,7 @@ class Config:
     seed: int = 0
     algo_name: str = "ppo"
     checkpoint = None
-    num_processes: int = 16
+    num_processes: int = 32
     gamma: float = 0.99
     recurrent_policy: bool = True
     value_loss_coef: float = 0.5
@@ -32,4 +32,4 @@ class Config:
     save_interval: int = 100
     log_interval: int = 10
 
-    steps: int = int(10e7)
+    steps: int = int(5e7)
