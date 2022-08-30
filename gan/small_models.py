@@ -4,6 +4,7 @@ import torch.nn as nn
 from functools import reduce
 from operator import mul
 from torchinfo import summary
+from torch.autograd import Variable
 
 
 def l2normalize(v, eps=1e-12):

@@ -124,9 +124,12 @@ class LevelVisualizer:
         return ret
 
     def draw_level_ascii(self, ascii_level_str):
-        lvl_rows = ascii_level_str.split("\n")
+        lvl_rows = []
+        tmp = ascii_level_str.split("\n")
+        h = len(tmp)
+        for i in range(h):
+            lvl_rows.append(tmp[i].split(","))
         w = len(lvl_rows[0])
-        h = len(lvl_rows)
         ts = self.tile_size
         p = self.pad
         lvl_img = Image.new(

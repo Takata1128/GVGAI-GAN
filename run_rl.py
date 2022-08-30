@@ -1,13 +1,12 @@
 from play_rl.config import Config
 from play_rl.agent import Agent
-from gan.env import Env
+from play_rl.env import Env
 
 
 def main():
     config = Config()
     env_def = Env(
-        "zelda",
-        version='v1'
+        "zelda"
     )
     agent = Agent(
         env_def,

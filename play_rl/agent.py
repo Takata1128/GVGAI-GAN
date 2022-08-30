@@ -12,7 +12,7 @@ from a2c_ppo_acktr import algo, utils
 from .policy import Policy
 from a2c_ppo_acktr.storage import RolloutStorage
 from .config import Config
-from gan.env import Env
+from .env import Env
 
 
 class Agent:
@@ -257,7 +257,7 @@ class Agent:
                     )
                     end = time.time()
                     print(
-                        "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}\n".format(
+                        "Updates {}, num timesteps {}, FPS {} \n Last {} training episodes: mean/median reward {:.2f}/{:.2f}, min/max reward {:.2f}/{:.2f}\n".format(
                             update_count,
                             total_num_steps,
                             int(total_num_steps / (end - start)),
