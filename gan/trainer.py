@@ -30,8 +30,8 @@ class Trainer:
         np.random.seed(config.seed)
         torch.manual_seed(config.seed)
         torch.cuda.manual_seed(config.seed)
-        # torch.backends.cudnn.benchmark = False
-        # torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
 
         if config.cuda:
             self.device = torch.device(
@@ -157,7 +157,8 @@ class Trainer:
                 use_self_attention=self.config.use_self_attention_d,
                 use_minibatch_std=self.config.use_minibatch_std,
                 use_recon_loss=self.config.use_recon_loss,
-                use_conditional=self.config.use_conditional
+                use_conditional=self.config.use_conditional,
+                use_spectral_norm=self.config.use_sn_d
             ).to(self.device)
         elif self.config.model_type == 'only_sa':
             from .sa_models import Discriminator
@@ -208,9 +209,9 @@ class Trainer:
                 self.config.eval_playable_counts,
                 self.config.latent_size,
             ).to(self.device)
-            labels_for_show = self._get_labels(9)
+            labels_for_show = self._get_labels(9).int()
             labels_for_eval = self._get_labels(
-                self.config.eval_playable_counts)
+                self.config.eval_playable_counts).int()
 
             # model_save_path
             model_save_path = os.path.join(
@@ -225,7 +226,7 @@ class Trainer:
                     latent, real, label = (
                         latent.to(self.device).float(),
                         real.to(self.device).float(),
-                        label.to(self.device).float(),
+                        label.to(self.device).int(),
                     )
                     d = next(self.generator.parameters()).device
                     fake_logit = self.generator(latent, label)
@@ -432,7 +433,7 @@ class Trainer:
 
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
-                real_logits, fake_logits, self.config.label_flip_prob)
+                real_logits, fake_logits, self.config.smooth_label_value)
         elif self.config.adv_loss == "hinge":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss_hinge(
                 real_logits, fake_logits

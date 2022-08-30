@@ -35,6 +35,7 @@ class TrainingConfig:
     use_self_attention_d: bool = False
     use_deconv_g: bool = True
     use_bn_d: bool = False
+    use_sn_d: bool = True
     use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
@@ -51,7 +52,7 @@ class TrainingConfig:
     generator_lr: float = 0.00005
     discriminator_lr: float = 0.00005
     epochs: int = 1000000  # training epochs
-    label_flip_prob: float = 0.0  # prob of flipping real label
+    smooth_label_value: float = 0.0  # prob of flipping real label
     save_image_interval: int = 50000  # save images interval
     save_model_interval: int = 1000000  # save models interval
     eval_playable_interval: int = 50000  # check playable interval
@@ -195,6 +196,7 @@ class SmallModelConfig(TrainingConfig):
     use_self_attention_d: bool = True
     use_deconv_g: bool = True
     use_bn_d: bool = False
+    use_sn_d: bool = False
     use_minibatch_std: bool = True
     use_spectral_norm: bool = False
     use_conditional: bool = False

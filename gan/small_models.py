@@ -6,6 +6,44 @@ from operator import mul
 from torchinfo import summary
 
 
+def l2normalize(v, eps=1e-12):
+    return v / (v.norm() + eps)
+
+
+class SpectralNorm(nn.Module):
+    def __init__(self, module, name='weight', power_iterations=1):
+        super(SpectralNorm, self).__init__()
+        self.module = module
+        self.name = name
+        self.power_iterations = power_iterations
+        if not self._made_params():
+            self._make_params()
+
+    def _update_u_v(self):
+        u = getattr(self.module, self.name + "_u")
+        v = getattr(self.module, self.name + "_v")
+        w = getattr(self.module, self.name + "_bar")
+
+        height = w.data.shape[0]
+        for _ in range(self.power_iterations):
+            v.data = l2normalize(
+                torch.mv(torch.t(w.view(height, -1).data), u.data))
+            u.data = l2normalize(torch.mv(w.view(height, -1).data, v.data))
+
+        # sigma = torch.dot(u.data, torch.mv(w.view(height,-1).data, v.data))
+        sigma = u.dot(w.view(height, -1).mv(v))
+        setattr(self.module, self.name, w / sigma.expand_as(w))
+
+    def _made_params(self):
+        try:
+            u = getattr(self.module, self.name + "_u")
+            v = getattr(self.module, self.name + "_v")
+            w = getattr(self.module, self.name + "_bar")
+            return True
+        except AttributeError:
+            return False
+
+
 class Resize(nn.Module):
     def __init__(self, shape):
         super(Resize, self).__init__()
@@ -62,16 +100,18 @@ class Self_Attn(nn.Module):
 
 
 class ConditionalSelfAttention(nn.Module):
-    def __init__(self, in_dim, shape, label_dim):
+    def __init__(self, in_dim, shape):
         super().__init__()
         self.shape = shape
         self.attn = Self_Attn(in_dim)
-        self.embedding = nn.Linear(label_dim, mul(*shape))
+        self.in_dim = in_dim
+        num_embeddings = mul(*self.shape)
+        self.embedding = nn.Embedding(num_embeddings, num_embeddings)
 
     def forward(self, x, label=None):
         x = self.attn(x)
         u = self.embedding(label)
-        u = u.view(-1, 1, *self.shape)
+        u = u.view(-1, label.shape[1], *self.shape)
         x = torch.cat([x, u], dim=1)
         return x
 
@@ -109,12 +149,15 @@ class GenBlock(nn.Module):
 
 
 class DisBlock(nn.Module):
-    def __init__(self, in_ch, out_ch, use_bn):
+    def __init__(self, in_ch, out_ch, use_bn=False, use_sn=True):
         super().__init__()
         self.use_bn = use_bn
         self.conv = nn.Conv2d(in_ch, out_ch, 4, stride=2, padding=1)
-        if use_bn:
+        if use_sn:
+            self.conv = SpectralNorm(self.conv)
+        elif use_bn:
             self.bn = nn.BatchNorm2d(out_ch)
+
         self.act = nn.LeakyReLU(0.2, True)
 
     def forward(self, x, label=None):
@@ -170,11 +213,12 @@ class Generator(nn.Module):
         )
         if self.use_conditional:
             self.self_attn2 = ConditionalSelfAttention(
-                filters, shapes[-1], out_dim)
+                filters, shapes[-1])
         elif self.use_self_attention:
             self.self_attn2 = Self_Attn(filters)
 
-        self.outconv = nn.Sequential(nn.Conv2d(filters+int(self.use_conditional), out_dim,
+        outconv_ch = filters + (0 if not self.use_conditional else out_dim)
+        self.outconv = nn.Sequential(nn.Conv2d(outconv_ch, out_dim,
                                                kernel_size=1, stride=1), nn.ReLU())
 
     def forward(self, z, label=None):
@@ -199,7 +243,7 @@ class Generator(nn.Module):
     def summary(self, batch_size=32):
         if self.use_conditional:
             summary(self, ((batch_size, self.z_size),
-                    (batch_size, self.out_dim)))
+                    (batch_size, self.out_dim)), dtypes=[torch.float, torch.int])
         else:
             summary(self, (batch_size, self.z_size),)
 
@@ -214,32 +258,47 @@ class Discriminator(nn.Module):
         use_self_attention=True,
         use_minibatch_std=False,
         use_recon_loss=False,
-        use_conditional=False
+        use_conditional=False,
+        use_spectral_norm=True
     ):
         super(Discriminator, self).__init__()
         self.use_minibatch_std = use_minibatch_std
         self.use_recon_loss = use_recon_loss
         self.use_self_attention = use_self_attention
         self.use_conditional = use_conditional
+        self.use_sn = use_spectral_norm
         self.input_ch = in_ch
         self.input_shape = shapes[0]
-        self.preprocess = nn.Sequential(
-            nn.Conv2d(in_ch, filters, 1, stride=1, bias=True),
-            nn.LeakyReLU(0.2, True),
-        )
+
+        preprocess_conv = nn.Conv2d(in_ch, filters, 1, stride=1, bias=True)
+        if self.use_sn:
+            self.preprocess = nn.Sequential(
+                SpectralNorm(preprocess_conv),
+                nn.LeakyReLU(0.2, True),
+            )
+        else:
+            self.preprocess = nn.Sequential(
+                preprocess_conv,
+                nn.LeakyReLU(0.2, True),
+            )
+
         if self.use_conditional:
             self.self_attn1 = ConditionalSelfAttention(
-                filters, self.input_shape, self.input_ch)
+                filters, self.input_shape)
         elif self.use_self_attention:
             self.self_attn1 = Self_Attn(filters)
 
+        block1_ch = filters + \
+            (0 if not self.use_conditional else self.input_ch)
+
         self.block1 = DisBlock(
-            filters+int(self.use_conditional), filters*2, use_bn=use_bn)
+            block1_ch, filters*2, use_bn=use_bn, use_sn=self.use_sn)
 
         if self.use_self_attention:
             self.self_attn2 = Self_Attn(filters*2)
 
-        self.block2 = DisBlock(filters*2, filters*4, use_bn=use_bn)
+        self.block2 = DisBlock(filters*2, filters*4,
+                               use_bn=use_bn, use_sn=self.use_sn)
 
         if self.use_recon_loss:
             self.decoder = Decoder(filters*4, self.input_ch)
@@ -247,8 +306,12 @@ class Discriminator(nn.Module):
         if self.use_minibatch_std:
             self.minibatch_std = MiniBatchStd()
 
-        self.postprocess = nn.Conv2d(
-            filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0, bias=False)
+        if self.use_sn:
+            self.postprocess = SpectralNorm(
+                nn.Conv2d(filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0))
+        else:
+            self.postprocess = nn.Conv2d(
+                filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0)
 
     def forward(self, x, label=None):
         x = self.preprocess(x)
@@ -286,7 +349,7 @@ class Discriminator(nn.Module):
     def summary(self, batch_size=64):
         if self.use_conditional:
             summary(self, ((batch_size, self.input_ch, *self.input_shape),
-                    (batch_size, self.input_ch)))
+                    (batch_size, self.input_ch)), dtypes=[torch.float, torch.int])
         else:
             summary(self, (batch_size, self.input_ch, *self.input_shape))
 

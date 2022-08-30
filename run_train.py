@@ -17,23 +17,38 @@ if __name__ == "__main__":
     # trainer = Trainer(config)
     # trainer.train()
 
-    config = SmallModelConfig()
-    config.set_env()
-    trainer = Trainer(config)
-    trainer.train()
+    for i in range(5):
+        config = SmallModelConfig()
+        config.set_env()
+        config.seed = i
+        config.discriminator_filters = 64
+        trainer = Trainer(config)
+        trainer.train()
 
-    config = SmallModelConfig()
-    config.set_env()
-    config.use_self_attention_g = False
-    config.use_self_attention_d = False
-    trainer = Trainer(config)
-    trainer.train()
+    for i in range(5):
+        config = SmallModelConfig()
+        config.set_env()
+        config.seed = i
+        config.use_sn_d = True
+        trainer = Trainer(config)
+        trainer.train()
 
-    config = SmallModelConfig()
-    config.set_env()
-    config.use_conditional = True
-    trainer = Trainer(config)
-    trainer.train()
+    for i in range(5):
+        config = SmallModelConfig()
+        config.set_env()
+        config.seed = i
+        config.adv_loss = 'baseline'
+        config.smooth_label_value = 0.9
+        trainer = Trainer(config)
+        trainer.train()
+
+    # for i in range(5):
+    #     config = SmallModelConfig()
+    #     config.set_env()
+    #     config.seed = i
+    #     config.discriminator_filters = 128
+    #     trainer = Trainer(config)
+    #     trainer.train()
 
     # latent_sizes = [32, 64]
     # filters = [64, 128]
