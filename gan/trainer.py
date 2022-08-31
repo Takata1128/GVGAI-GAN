@@ -83,19 +83,8 @@ class Trainer:
     def _build_model(self):
         latent_shape = (self.config.latent_size,)
 
-        if self.config.model_type == "branch":
-            from .branch_models import Generator
-            self.generator = Generator(
-                shape_channel=2,
-                object_channel=7,
-                shapes=self.config.model_shapes,
-                z_shape=latent_shape,
-                filters=self.config.generator_filters,
-                is_self_attention=self.config.use_self_attention_g,
-                is_conditional=self.config.use_conditional,
-            ).to(self.device)
-        elif self.config.model_type == "simple":
-            from .simple_models import Generator
+        if self.config.model_type == "simple":
+            from .models.simple_models import Generator
             self.generator = Generator(
                 out_dim=self.config.input_shape[0],
                 shapes=self.config.model_shapes,
@@ -105,7 +94,7 @@ class Trainer:
                 is_conditional=self.config.use_conditional,
             ).to(self.device)
         elif self.config.model_type == "small":
-            from .small_models import Generator
+            from .models.small_models import Generator
             self.generator = Generator(
                 out_dim=self.config.input_shape[0],
                 shapes=self.config.model_shapes,
@@ -115,28 +104,12 @@ class Trainer:
                 use_conditional=self.config.use_conditional,
                 use_deconv_g=self.config.use_deconv_g
             ).to(self.device)
-        elif self.config.model_type == "only_sa":
-            from .sa_models import Generator
-            self.generator = Generator(
-                out_dim=self.config.input_shape[0],
-                shapes=self.config.model_shapes,
-                z_shape=latent_shape,
-                filters=self.config.generator_filters,
-                use_self_attention=self.config.use_self_attention_g
-            ).to(self.device)
         else:
-            from .models import Generator
-            self.generator = Generator(
-                out_dim=self.config.input_shape[0],
-                shapes=self.config.model_shapes,
-                z_shape=latent_shape,
-                filters=self.config.generator_filters,
-                is_self_attention=self.config.use_self_attention_g,
-                is_conditional=self.config.use_conditional,
-            ).to(self.device)
+            raise NotImplementedError(
+                f"{self.config.model_type} model is not implemented.")
 
         if self.config.model_type == 'simple':
-            from .simple_models import Discriminator
+            from .models.simple_models import Discriminator
             self.discriminator = Discriminator(
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
@@ -148,7 +121,7 @@ class Trainer:
                 use_recon_loss=self.config.use_recon_loss,
             ).to(self.device)
         elif self.config.model_type == 'small':
-            from .small_models import Discriminator
+            from .models.small_models import Discriminator
             self.discriminator = Discriminator(
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
@@ -160,25 +133,9 @@ class Trainer:
                 use_conditional=self.config.use_conditional,
                 use_spectral_norm=self.config.use_sn_d
             ).to(self.device)
-        elif self.config.model_type == 'only_sa':
-            from .sa_models import Discriminator
-            self.discriminator = Discriminator(
-                in_ch=self.config.input_shape[0],
-                shapes=self.config.model_shapes[::-1],
-                filters=self.config.discriminator_filters,
-                use_recon_loss=self.config.use_recon_loss
-            ).to(self.device)
         else:
-            from .models import Discriminator
-            self.discriminator = Discriminator(
-                in_ch=self.config.input_shape[0],
-                shapes=self.config.model_shapes[::-1],
-                filters=self.config.discriminator_filters,
-                is_self_attention=self.config.use_self_attention_d,
-                is_minibatch_std=self.config.use_minibatch_std,
-                is_spectral_norm=self.config.use_spectral_norm,
-                is_conditional=self.config.use_conditional,
-            ).to(self.device)
+            raise NotImplementedError(
+                f"{self.config.model_type} model is not implemented.")
 
         # Optimizer
         self.optimizer_g = torch.optim.RMSprop(

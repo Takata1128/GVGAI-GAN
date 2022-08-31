@@ -122,7 +122,7 @@ class Agent:
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 
-        torch.set_num_threads(1)
+        torch.set_num_threads(4)
 
         now = datetime.datetime.now()
         self.id = now.strftime("%Y%m%d%H%M%S")

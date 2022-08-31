@@ -32,4 +32,4 @@ class Config:
     save_interval: int = 100
     log_interval: int = 10
 
-    steps: int = int(5e7)
+    steps: int = int(2.5e7)
