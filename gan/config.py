@@ -203,7 +203,7 @@ class SmallModelConfig(TrainingConfig):
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "l1"  # ["l1","l2","none"]
+    div_loss: str = "none"  # ["l1","l2","none"]
     lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 

@@ -21,14 +21,6 @@ if __name__ == "__main__":
         config = SmallModelConfig()
         config.set_env()
         config.seed = i
-        config.discriminator_filters = 64
-        trainer = Trainer(config)
-        trainer.train()
-
-    for i in range(5):
-        config = SmallModelConfig()
-        config.set_env()
-        config.seed = i
         config.use_sn_d = True
         trainer = Trainer(config)
         trainer.train()

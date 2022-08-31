@@ -7,42 +7,57 @@ from torchinfo import summary
 from torch.autograd import Variable
 
 
-def l2normalize(v, eps=1e-12):
-    return v / (v.norm() + eps)
+class SpectralNorm:
+    '''
+    Implementation of Spectral Normalization for PyTorch
+    https://gist.github.com/rosinality/a96c559d84ef2b138e486acf27b5a56e
+    '''
 
-
-class SpectralNorm(nn.Module):
-    def __init__(self, module, name='weight', power_iterations=1):
-        super(SpectralNorm, self).__init__()
-        self.module = module
+    def __init__(self, name):
         self.name = name
-        self.power_iterations = power_iterations
-        if not self._made_params():
-            self._make_params()
 
-    def _update_u_v(self):
-        u = getattr(self.module, self.name + "_u")
-        v = getattr(self.module, self.name + "_v")
-        w = getattr(self.module, self.name + "_bar")
+    def compute_weight(self, module):
+        weight = getattr(module, self.name + '_orig')
+        u = getattr(module, self.name + '_u')
+        size = weight.size()
+        weight_mat = weight.contiguous().view(size[0], -1)
+        if weight_mat.is_cuda:
+            u = u.cuda()
+        v = weight_mat.t() @ u
+        v = v / v.norm()
+        u = weight_mat @ v
+        u = u / u.norm()
+        weight_sn = weight_mat / (u.t() @ weight_mat @ v)
+        weight_sn = weight_sn.view(*size)
 
-        height = w.data.shape[0]
-        for _ in range(self.power_iterations):
-            v.data = l2normalize(
-                torch.mv(torch.t(w.view(height, -1).data), u.data))
-            u.data = l2normalize(torch.mv(w.view(height, -1).data, v.data))
+        return weight_sn, Variable(u.data)
 
-        # sigma = torch.dot(u.data, torch.mv(w.view(height,-1).data, v.data))
-        sigma = u.dot(w.view(height, -1).mv(v))
-        setattr(self.module, self.name, w / sigma.expand_as(w))
+    @staticmethod
+    def apply(module, name):
+        fn = SpectralNorm(name)
 
-    def _made_params(self):
-        try:
-            u = getattr(self.module, self.name + "_u")
-            v = getattr(self.module, self.name + "_v")
-            w = getattr(self.module, self.name + "_bar")
-            return True
-        except AttributeError:
-            return False
+        weight = getattr(module, name)
+        del module._parameters[name]
+        module.register_parameter(name + '_orig', nn.Parameter(weight.data))
+        input_size = weight.size(0)
+        u = Variable(torch.randn(input_size, 1) * 0.1, requires_grad=False)
+        setattr(module, name + '_u', u)
+        setattr(module, name, fn.compute_weight(module)[0])
+
+        module.register_forward_pre_hook(fn)
+
+        return fn
+
+    def __call__(self, module, input):
+        weight_sn, u = self.compute_weight(module)
+        setattr(module, self.name, weight_sn)
+        setattr(module, self.name + '_u', u)
+
+
+def spectral_norm(module, name='weight'):
+    SpectralNorm.apply(module, name)
+
+    return module
 
 
 class Resize(nn.Module):
@@ -155,7 +170,7 @@ class DisBlock(nn.Module):
         self.use_bn = use_bn
         self.conv = nn.Conv2d(in_ch, out_ch, 4, stride=2, padding=1)
         if use_sn:
-            self.conv = SpectralNorm(self.conv)
+            self.conv = spectral_norm(self.conv)
         elif use_bn:
             self.bn = nn.BatchNorm2d(out_ch)
 
@@ -274,7 +289,7 @@ class Discriminator(nn.Module):
         preprocess_conv = nn.Conv2d(in_ch, filters, 1, stride=1, bias=True)
         if self.use_sn:
             self.preprocess = nn.Sequential(
-                SpectralNorm(preprocess_conv),
+                spectral_norm(preprocess_conv),
                 nn.LeakyReLU(0.2, True),
             )
         else:
@@ -308,7 +323,7 @@ class Discriminator(nn.Module):
             self.minibatch_std = MiniBatchStd()
 
         if self.use_sn:
-            self.postprocess = SpectralNorm(
+            self.postprocess = spectral_norm(
                 nn.Conv2d(filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0))
         else:
             self.postprocess = nn.Conv2d(
