@@ -1,8 +1,7 @@
 import argparse
-from gan.config import NormalModelConfig, SmallModelConfig, TrainingConfig, DataExtendConfig, BranchModelConfig, OnlySAModelConfig
-from gan.level_dataset_extend import prepare_dataset
-from gan.small_models import Discriminator
+from gan.config import SmallModelConfig, SAModelConfig
 from gan.trainer import Trainer
+from gan.level_dataset_extend import prepare_dataset
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -17,22 +16,104 @@ if __name__ == "__main__":
     # trainer = Trainer(config)
     # trainer.train()
 
-    for i in range(5):
-        config = SmallModelConfig()
-        config.set_env()
-        config.seed = i
-        config.use_sn_d = True
-        trainer = Trainer(config)
-        trainer.train()
+    config = SAModelConfig()
+    config.set_env()
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    trainer = Trainer(config)
+    trainer.train()
 
-    for i in range(5):
-        config = SmallModelConfig()
-        config.set_env()
-        config.seed = i
-        config.adv_loss = 'baseline'
-        config.smooth_label_value = 0.9
-        trainer = Trainer(config)
-        trainer.train()
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'l1'
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'none'
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'l1'
+    # config.use_self_attention_d = False
+    # config.use_self_attention_g = False
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'l1'
+    # config.use_conditional = True
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'l1'
+    # config.generator_filters = 64
+    # config.discriminator_filters = 64
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'l1'
+    # config.use_bn = True
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'l1'
+    # config.use_sn = True
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.div_loss = 'l1'
+    # # config.seed = i
+    # # config.use_sn_d = True
+    # config.generator_lr = 0.0001
+    # config.discriminator_lr = 0.0001
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    # for i in range(5):
+    #     config = SmallModelConfig()
+    #     config.set_env()
+    #     config.seed = i
+    #     config.use_sn_d = True
+    #     trainer = Trainer(config)
+    #     trainer.train()
+
+    # for i in range(5):
+    #     config = SmallModelConfig()
+    #     config.set_env()
+    #     config.seed = i
+    #     config.adv_loss = 'baseline'
+    #     config.smooth_label_value = 0.9
+    #     trainer = Trainer(config)
+    #     trainer.train()
 
     # for i in range(5):
     #     config = SmallModelConfig()

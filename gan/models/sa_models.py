@@ -63,6 +63,23 @@ class Self_Attn(nn.Module):
         return out
 
 
+class ConditionalSelfAttention(nn.Module):
+    def __init__(self, in_dim, shape):
+        super().__init__()
+        self.shape = shape
+        self.attn = Self_Attn(in_dim)
+        self.in_dim = in_dim
+        num_embeddings = mul(*self.shape)
+        self.embedding = nn.Embedding(num_embeddings, num_embeddings)
+
+    def forward(self, x, label=None):
+        x = self.attn(x)
+        u = self.embedding(label)
+        u = u.view(-1, label.shape[1], *self.shape)
+        x = torch.cat([x, u], dim=1)
+        return x
+
+
 class MiniBatchStd(nn.Module):
     def forward(self, x):
         std = torch.std(x, dim=0, keepdim=True)
@@ -78,36 +95,37 @@ class Generator(nn.Module):
         out_dim: int,
         shapes: list[tuple[int]],
         z_shape,
-        filters=8,
-        use_self_attention=True
+        filters=64
     ):
         super(Generator, self).__init__()
         self.z_size = z_shape[0]
-        self.init_filters = 4
+        self.init_filters = filters*4
         self.output_shape = shapes[-1]
-        self.use_self_attention = use_self_attention
 
         self.preprocess = nn.Linear(
-            self.z_size, mul(self.init_filters, mul(*self.output_shape)))
-        self.conv0 = nn.ConvTranspose2d(self.init_filters, filters, 1, 1, 0)
-        self.bn0 = nn.BatchNorm2d(filters)
-        self.conv1 = nn.ConvTranspose2d(filters, filters*2, 1, 1, 0)
-        self.bn1 = nn.BatchNorm2d(filters*2)
-        self.attn = Self_Attn(filters*2)
-        self.conv2 = nn.ConvTranspose2d(filters*2, filters, 1, 1, 0)
-        self.bn2 = nn.BatchNorm2d(filters)
+            self.z_size, mul(out_dim, mul(*self.output_shape)))
+        # self.preprocess = nn.Sequential(
+        #     nn.ConvTranspose2d(self.z_size, filters*4,
+        #                        self.output_shape, 1, 0, bias=False),
+        #     nn.BatchNorm2d(filters*4),
+        #     nn.ReLU(True)
+        # )
+        self.conv0 = nn.ConvTranspose2d(out_dim, filters*4, 1, 1, 0)
+        self.bn0 = nn.BatchNorm2d(filters*4)
+        self.attn = Self_Attn(filters*4)
+        self.conv1 = nn.ConvTranspose2d(filters*4, filters, 1, 1, 0)
+        self.bn1 = nn.BatchNorm2d(filters)
         self.output = nn.ConvTranspose2d(filters, out_dim, 1, 1, 0)
 
-        self.act = nn.LeakyReLU()
+        self.act = nn.ReLU(True)
 
     def forward(self, z, label=None):
+        # z = z.view(-1, self.z_size, 1, 1)
         x = self.preprocess(z)
-        x = x.view(-1, self.init_filters, *self.output_shape)
+        x = x.view(-1, 8, *self.output_shape)  # linear
         x = self.act(self.bn0(self.conv0(x)))
+        x = self.attn(x)
         x = self.act(self.bn1(self.conv1(x)))
-        if self.use_self_attention:
-            x = self.attn(x)
-        x = self.act(self.bn2(self.conv2(x)))
         x = self.output(x)
         return x
 
@@ -120,55 +138,28 @@ class Discriminator(nn.Module):
         self,
         in_ch,
         shapes,
-        filters=16,
-        use_self_attention=True,
-        use_recon_loss=False
+        filters=64,
     ):
         super(Discriminator, self).__init__()
-        self.use_self_attention = use_self_attention
-        self.use_recon_loss = use_recon_loss
         self.input_ch = in_ch
         self.input_shape = shapes[0]
 
         self.conv1 = nn.Conv2d(in_ch, filters, 1, 1, 0)
+        self.attn = Self_Attn(filters)
         self.conv2 = nn.Conv2d(filters, filters*2, 1, 1, 0)
-        self.attn1 = Self_Attn(filters*2)
-        self.conv3 = nn.Conv2d(filters*2, filters*2, 4, 2, 1)
-        self.attn2 = Self_Attn(filters*2)
-        self.conv4 = nn.Conv2d(filters*2, filters, 4, 2, 1)
-
         self.act = nn.LeakyReLU()
-        self.reconstruct = nn.Sequential(
-            nn.ConvTranspose2d(filters, filters*2, 4, 2, 1),
-            nn.BatchNorm2d(filters*2),
-            nn.LeakyReLU(),
-            nn.ConvTranspose2d(filters*2, filters*2, 4, 2, 1),
-            nn.BatchNorm2d(filters*2),
-            nn.LeakyReLU(),
-            nn.Conv2d(filters*2, filters, 1, 1, 0),
-            nn.BatchNorm2d(filters),
-            nn.LeakyReLU(),
-            nn.Conv2d(filters, in_ch, 1, 1, 0),
-        )
-        self.pool = nn.AdaptiveAvgPool2d(1)
-        self.output = nn.Linear(filters, 1)
+        # self.pool = nn.AdaptiveAvgPool2d(1)
+        self.pool = nn.Conv2d(filters*2, filters*2,
+                              shapes[0][0], shapes[0][1])
+        self.output = nn.Linear(filters*2, 1)
 
     def forward(self, x, label=None):
         x = self.act(self.conv1(x))
+        x = self.attn(x)
         x = self.act(self.conv2(x))
-        if self.use_self_attention:
-            x = self.attn1(x)
-        x = self.act(self.conv3(x))
-        if self.use_self_attention:
-            x = self.attn2(x)
-        x = self.act(self.conv4(x))
-        x_r = x
         x = self.pool(x)
         x = x.view(x.size(0), -1)
         out = self.output(x)
-        if self.use_recon_loss:
-            recon = self.reconstruct(x_r)
-            return out, recon
         return out
 
     def summary(self, batch_size=64):

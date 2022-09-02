@@ -30,8 +30,8 @@ class Trainer:
         np.random.seed(config.seed)
         torch.manual_seed(config.seed)
         torch.cuda.manual_seed(config.seed)
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.benchmark = False
+        # torch.backends.cudnn.deterministic = True
 
         if config.cuda:
             self.device = torch.device(
@@ -83,14 +83,14 @@ class Trainer:
     def _build_model(self):
         latent_shape = (self.config.latent_size,)
 
-        if self.config.model_type == "simple":
-            from .models.simple_models import Generator
+        if self.config.model_type == "normal":
+            from .models.models import Generator
             self.generator = Generator(
                 out_dim=self.config.input_shape[0],
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
                 filters=self.config.generator_filters,
-                use_self_attention=self.config.use_self_attention_g,
+                is_self_attention=self.config.use_self_attention_g,
                 is_conditional=self.config.use_conditional,
             ).to(self.device)
         elif self.config.model_type == "small":
@@ -104,12 +104,20 @@ class Trainer:
                 use_conditional=self.config.use_conditional,
                 use_deconv_g=self.config.use_deconv_g
             ).to(self.device)
+        elif self.config.model_type == 'sa':
+            from .models.sa_models import Generator
+            self.generator = Generator(
+                out_dim=self.config.input_shape[0],
+                shapes=self.config.model_shapes,
+                z_shape=latent_shape,
+                filters=self.config.generator_filters,
+            )
         else:
             raise NotImplementedError(
                 f"{self.config.model_type} model is not implemented.")
 
-        if self.config.model_type == 'simple':
-            from .models.simple_models import Discriminator
+        if self.config.model_type == 'normal':
+            from .models.models import Discriminator
             self.discriminator = Discriminator(
                 in_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes[::-1],
@@ -118,7 +126,6 @@ class Trainer:
                 is_minibatch_std=self.config.use_minibatch_std,
                 is_spectral_norm=self.config.use_spectral_norm,
                 is_conditional=self.config.use_conditional,
-                use_recon_loss=self.config.use_recon_loss,
             ).to(self.device)
         elif self.config.model_type == 'small':
             from .models.small_models import Discriminator
@@ -133,6 +140,13 @@ class Trainer:
                 use_conditional=self.config.use_conditional,
                 use_spectral_norm=self.config.use_sn_d
             ).to(self.device)
+        elif self.config.model_type == 'sa':
+            from .models.sa_models import Discriminator
+            self.discriminator = Discriminator(
+                in_ch=self.config.input_shape[0],
+                shapes=self.config.model_shapes[::-1],
+                filters=self.config.discriminator_filters,
+            )
         else:
             raise NotImplementedError(
                 f"{self.config.model_type} model is not implemented.")
@@ -149,7 +163,7 @@ class Trainer:
         wandb.login()
         metrics = {}
         max_playable_count = 0
-        with wandb.init(project=f"{self.config.env_name} Level GAN", config=self.config.__dict__):
+        with wandb.init(project=f"{self.config.env_name} Level GAN by {self.config.model_type} model", config=self.config.__dict__):
             # check model summary
             self.generator.summary(batch_size=self.config.train_batch_size)
             self.discriminator.summary(

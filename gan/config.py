@@ -155,37 +155,8 @@ class NormalModelConfig(TrainingConfig):
 
 
 @dataclass
-class BranchModelConfig(TrainingConfig):
-    dataset_type: str = "generated_good"  # [train, generated]
-
-    # model define
-    latent_size: int = 128  # latent dims for generation
-    generator_filters: int = 256
-    discriminator_filters: int = 16
-    input_shape: tuple[int] = None
-    model_shapes: list[tuple[int]] = None
-    model_type: str = "branch"  # "normal","simple","branch","small"
-    use_self_attention_g: bool = True
-    use_self_attention_d: bool = True
-    use_minibatch_std: bool = False
-    use_spectral_norm: bool = False
-    use_conditional: bool = False
-
-    # learning parameters
-    adv_loss: str = "baseline"  # ["baseline","hinge"]
-    div_loss: str = "none"  # ["l1","l2","none"]
-    lambda_div: float = 50.0
-    div_loss_threshold_playability: float = 0.0
-
-    bootstrap: str = "none"  # ["none", "random", "smart"]
-
-    train_batch_size: int = 64  # training batch size
-    steps: int = 50000  # training steps
-
-
-@dataclass
 class SmallModelConfig(TrainingConfig):
-    dataset_type: str = "generated"  # [train, generated]
+    dataset_type: str = "generated_fixed"  # [train, generated]
 
     # model define
     latent_size: int = 32  # latent dims for generation
@@ -204,7 +175,7 @@ class SmallModelConfig(TrainingConfig):
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
     div_loss: str = "none"  # ["l1","l2","none"]
-    lambda_div: float = 50.0
+    lambda_div: float = 10.0
     div_loss_threshold_playability: float = 0.0
 
     bootstrap: str = "none"  # ["none", "random", "smart"]
@@ -229,33 +200,43 @@ class SmallModelConfig(TrainingConfig):
 
 
 @dataclass
-class OnlySAModelConfig(TrainingConfig):
-    dataset_type: str = "generated_good"  # [train, generated]
+class SAModelConfig(TrainingConfig):
+    dataset_type: str = "train"  # [train, generated]
 
     # model define
     latent_size: int = 32  # latent dims for generation
-    generator_filters: int = 16
-    discriminator_filters: int = 16
-    model_type: str = "small"  # "normal","simple","branch","small","only_sa"
+    generator_filters: int = 64
+    discriminator_filters: int = 256
+    model_type: str = "sa"  # "normal","small","sa"
     use_self_attention_g: bool = True
     use_self_attention_d: bool = True
-    use_minibatch_std: bool = False
+    use_deconv_g: bool = True
+    use_bn_d: bool = False
+    use_sn_d: bool = False
+    use_minibatch_std: bool = True
     use_spectral_norm: bool = False
     use_conditional: bool = False
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
     div_loss: str = "none"  # ["l1","l2","none"]
-    lambda_div: float = 50.0
+    lambda_div: float = 10.0
     div_loss_threshold_playability: float = 0.0
 
     bootstrap: str = "none"  # ["none", "random", "smart"]
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 100000  # training steps
+    steps: int = 50000*(train_batch_size//32)  # training steps
 
-    use_recon_loss: bool = True
+    save_image_interval: int = 1000*32  # save images interval
+    save_model_interval: int = 5000*32  # save models interval
+    eval_playable_interval: int = 1000*32  # check playable interval
+
+    use_recon_loss: bool = False
     recon_lambda: float = 1.0
+
+    generator_lr: float = 0.00005
+    discriminator_lr: float = 0.00005
 
     def set_env(self):
         env = Env(self.env_name, self.env_version)
