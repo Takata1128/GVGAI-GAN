@@ -200,6 +200,7 @@ class Trainer:
             os.makedirs(model_save_path)
 
             for epoch in range(1, self.config.epochs + 1):
+                self.generator.train()
                 for latent, real, label in self.train_loader:
                     step += 1
                     latent, real, label = (
@@ -207,8 +208,8 @@ class Trainer:
                         real.to(self.device).float(),
                         label.to(self.device).int(),
                     )
-                    fake_logit = self.generator(latent, label)
 
+                    fake_logit = self.generator(latent, label)
                     Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
                         real, fake_logit, label
                     )
@@ -232,67 +233,69 @@ class Trainer:
                 if step >= self.config.steps:
                     break
 
-                if epoch % self.image_save_epoch == 0:
-                    self._save_images()
-                    if self.config.use_recon_loss:
-                        self._save_recon_images(real, label)
-
-                if epoch % self.eval_epoch == 0 or epoch % self.bootstrap_epoch == 0:
-                    # bootstrap and data-extend
-                    latents = torch.randn(
-                        self.config.eval_playable_counts,
-                        self.config.latent_size,
-                    ).to(self.device)
-                    labels = self._get_labels(
-                        self.config.eval_playable_counts).int()
-                    levels = self._generate_levels(latents, labels)
-                    playable_levels = []
-                    for level_str in levels:
-                        if check_playable(level_str):
-                            playable_levels.append(level_str)
-                    wandb.log(
-                        {
-                            "Playable Ratio": len(playable_levels)
-                            / self.config.eval_playable_counts
-                        }
-                    )
-
-                    # eval
-                    if epoch % self.eval_epoch == 0:
-                        self._eval_models(levels, playable_levels)
-
-                    # bootstrap
-                    unique_playable_levels = list(set(playable_levels))
-                    if self.config.bootstrap and len(unique_playable_levels) > 1:
-                        unique_playable_levels = self._bootstrap(
-                            unique_playable_levels)
-                    # if isinstance(self.config, DataExtendConfig):
-                    #     for playable_level in unique_playable_levels:
-                    #         with open(
-                    #             os.path.join(self.config.level_data_path,
-                    #                          self.config.env_name, "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
-                    #         ) as f:
-                    #             f.write(playable_level)
-                    #             self.data_index += 1
-
-                    # if isinstance(self.config, DataExtendConfig) and self.config.reset_weight_threshold < len(playable_levels)/self.config.eval_playable_counts:
-                    if isinstance(self.config, DataExtendConfig) and self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
-                        print("reset weights of model.")
+                self.generator.eval()
+                with torch.no_grad():
+                    if epoch % self.image_save_epoch == 0:
                         self._save_images()
                         if self.config.use_recon_loss:
                             self._save_recon_images(real, label)
+
+                    if epoch % self.eval_epoch == 0 or epoch % self.bootstrap_epoch == 0:
+                        # bootstrap and data-extend
+                        latents = torch.randn(
+                            self.config.eval_playable_counts,
+                            self.config.latent_size,
+                        ).to(self.device)
+                        labels = self._get_labels(
+                            self.config.eval_playable_counts).int()
+                        levels = self._generate_levels(latents, labels)
+                        playable_levels = []
+                        for level_str in levels:
+                            if check_playable(level_str):
+                                playable_levels.append(level_str)
+                        wandb.log(
+                            {
+                                "Playable Ratio": len(playable_levels)
+                                / self.config.eval_playable_counts
+                            }
+                        )
+
+                        # eval
+                        if epoch % self.eval_epoch == 0:
+                            self._eval_models(levels, playable_levels)
+
+                        # bootstrap
+                        unique_playable_levels = list(set(playable_levels))
+                        if self.config.bootstrap and len(unique_playable_levels) > 1:
+                            unique_playable_levels = self._bootstrap(
+                                unique_playable_levels)
+                        # if isinstance(self.config, DataExtendConfig):
+                        #     for playable_level in unique_playable_levels:
+                        #         with open(
+                        #             os.path.join(self.config.level_data_path,
+                        #                          self.config.env_name, "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
+                        #         ) as f:
+                        #             f.write(playable_level)
+                        #             self.data_index += 1
+
+                        # if isinstance(self.config, DataExtendConfig) and self.config.reset_weight_threshold < len(playable_levels)/self.config.eval_playable_counts:
+                        if isinstance(self.config, DataExtendConfig) and self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
+                            print("reset weights of model.")
+                            self._save_images()
+                            if self.config.use_recon_loss:
+                                self._save_recon_images(real, label)
+                            self._build_model()
+                            self.reset_steps = step
+
+                    if isinstance(self.config, DataExtendConfig) and step-self.reset_steps >= 5000:
+                        print(
+                            f"reset weights of model. {step-self.reset_steps} steps progressed.")
                         self._build_model()
                         self.reset_steps = step
 
-                if isinstance(self.config, DataExtendConfig) and step-self.reset_steps >= 5000:
-                    print(
-                        f"reset weights of model. {step-self.reset_steps} steps progressed.")
-                    self._build_model()
-                    self.reset_steps = step
-
-                if epoch % self.model_save_epoch == 0:
-                    self._save_models(
-                        model_save_path, epoch, None)
+                    if epoch % self.model_save_epoch == 0:
+                        self._save_models(
+                            model_save_path, epoch, None)
 
     def _generate_levels(self, latents, labels):
         p_level = torch.softmax(
