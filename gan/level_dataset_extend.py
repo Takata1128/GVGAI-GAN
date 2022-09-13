@@ -111,7 +111,8 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
         shutil.rmtree(train_dir_path)
     os.makedirs(train_dir_path)
 
-    lvl_strs = visualizer.game.get_original_levels()
+    lvl_strs = visualizer.game.get_original_levels(
+        '/root/mnt/GVGAI-GAN/gan/data/level/zelda/originals')
 
     states = []
     for i, lvl_str in enumerate(lvl_strs):

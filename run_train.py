@@ -1,5 +1,5 @@
 import argparse
-from gan.config import SmallModelConfig, SAModelConfig
+from gan.config import SmallModelConfig, SAModelConfig, DataExtendConfig
 from gan.trainer import Trainer
 from gan.level_dataset_extend import prepare_dataset
 
@@ -7,8 +7,58 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, default="none")
     args = parser.parse_args()
+
+    # for i in range(3):
+    #     config = SmallModelConfig()
+    #     config.set_env()
+    #     config.seed = i
+    #     config.dataset_type = "train"
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #         )
+    #     config.eval_playable_interval = 20 * config.train_batch_size
+    #     config.save_image_interval = 20 * config.train_batch_size
+    #     config.save_model_interval = 100 * config.train_batch_size
+    #     trainer = Trainer(config)
+    #     trainer.train()
+
+    # for i in range(3):
+    #     config = SmallModelConfig()
+    #     config.set_env()
+    #     config.seed = i
+    #     config.dataset_type = "train"
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #         )
+    #     config.bootstrap_filter = 1.0
+    #     config.div_loss = 'none'
+    #     config.eval_playable_interval = 20 * config.train_batch_size
+    #     config.save_image_interval = 20 * config.train_batch_size
+    #     config.save_model_interval = 100 * config.train_batch_size
+    #     trainer = Trainer(config)
+    #     trainer.train()
+
+    # for i in range(3):
+    #     config = SmallModelConfig()
+    #     config.set_env()
+    #     config.seed = i
+    #     config.dataset_type = "train"
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #         )
+    #     config.use_recon_loss = False
+    #     config.eval_playable_interval = 20 * config.train_batch_size
+    #     config.save_image_interval = 20 * config.train_batch_size
+    #     config.save_model_interval = 100 * config.train_batch_size
+    #     trainer = Trainer(config)
+    #     trainer.train()
+
     # config = DataExtendConfig()
     # config.set_env()
+    # config.dataset_type = "train"
     # if config.dataset_type == "train":
     #     prepare_dataset(
     #         seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
@@ -16,8 +66,17 @@ if __name__ == "__main__":
     # trainer = Trainer(config)
     # trainer.train()
 
-    config = SAModelConfig()
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.dataset_type = "generated_0913"
+    # config.bootstrap = 'none'
+    # config.steps = 10000
+    # trainer = Trainer(config)
+    # trainer.train()
+
+    config = SmallModelConfig()
     config.set_env()
+    config.dataset_type = "train"
     if config.dataset_type == "train":
         prepare_dataset(
             seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
@@ -25,135 +84,98 @@ if __name__ == "__main__":
     trainer = Trainer(config)
     trainer.train()
 
-    # config = SmallModelConfig()
-    # config.set_env()
-    # config.div_loss = 'l1'
-    # # config.seed = i
-    # # config.use_sn_d = True
-    # trainer = Trainer(config)
-    # trainer.train()
+    config = SmallModelConfig()
+    config.set_env()
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.bootstrap_filter = 1.0
+    config.div_loss = 'none'
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.bootstrap_filter = 1.0
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.div_loss = 'none'
+    trainer = Trainer(config)
+    trainer.train()
 
     # config = SmallModelConfig()
     # config.set_env()
-    # config.div_loss = 'none'
-    # # config.seed = i
-    # # config.use_sn_d = True
-    # trainer = Trainer(config)
-    # trainer.train()
-
-    # config = SmallModelConfig()
-    # config.set_env()
+    # config.dataset_type = "train"
+    # if config.dataset_type == "train":
+    #     prepare_dataset(
+    #         seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #     )
+    # config.bootstrap = "smart"
     # config.div_loss = 'l1'
     # config.use_self_attention_d = False
     # config.use_self_attention_g = False
-    # # config.seed = i
-    # # config.use_sn_d = True
+    # config.eval_playable_interval = 20 * config.train_batch_size
+    # config.save_image_interval = 20 * config.train_batch_size
+    # config.save_model_interval = 100 * config.train_batch_size
     # trainer = Trainer(config)
     # trainer.train()
 
     # config = SmallModelConfig()
     # config.set_env()
-    # config.div_loss = 'l1'
-    # config.use_conditional = True
-    # # config.seed = i
-    # # config.use_sn_d = True
+    # config.dataset_type = "train"
+    # if config.dataset_type == "train":
+    #     prepare_dataset(
+    #         seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #     )
+    # config.bootstrap = "smart"
+    # config.div_loss = 'none'
+    # config.bootstrap_filter = 1.0
+    # config.eval_playable_interval = 20 * config.train_batch_size
+    # config.save_image_interval = 20 * config.train_batch_size
+    # config.save_model_interval = 100 * config.train_batch_size
+    # config.bootstrap_filter = 1.0
     # trainer = Trainer(config)
     # trainer.train()
 
-    # config = SmallModelConfig()
-    # config.set_env()
-    # config.div_loss = 'l1'
-    # config.generator_filters = 64
-    # config.discriminator_filters = 64
-    # # config.seed = i
-    # # config.use_sn_d = True
-    # trainer = Trainer(config)
-    # trainer.train()
-
-    # config = SmallModelConfig()
-    # config.set_env()
-    # config.div_loss = 'l1'
-    # config.use_bn = True
-    # # config.seed = i
-    # # config.use_sn_d = True
-    # trainer = Trainer(config)
-    # trainer.train()
-
-    # config = SmallModelConfig()
-    # config.set_env()
-    # config.div_loss = 'l1'
-    # config.use_sn = True
-    # # config.seed = i
-    # # config.use_sn_d = True
-    # trainer = Trainer(config)
-    # trainer.train()
-
-    # config = SmallModelConfig()
-    # config.set_env()
-    # config.div_loss = 'l1'
-    # # config.seed = i
-    # # config.use_sn_d = True
-    # config.generator_lr = 0.0001
-    # config.discriminator_lr = 0.0001
-    # trainer = Trainer(config)
-    # trainer.train()
-
-    # for i in range(5):
+    # lambda_divs = [1.0, 5.0, 10.0, 50.0]
+    # for div in lambda_divs:
     #     config = SmallModelConfig()
     #     config.set_env()
-    #     config.seed = i
-    #     config.use_sn_d = True
+    #     config.dataset_type = "train"
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #         )
+    #     config.bootstrap = "smart"
+    #     config.div_loss = 'l2'
+    #     config.eval_playable_interval = 20 * config.train_batch_size
+    #     config.save_image_interval = 20 * config.train_batch_size
+    #     config.save_model_interval = 100 * config.train_batch_size
+    #     config.lambda_div = div
     #     trainer = Trainer(config)
     #     trainer.train()
 
-    # for i in range(5):
-    #     config = SmallModelConfig()
-    #     config.set_env()
-    #     config.seed = i
-    #     config.adv_loss = 'baseline'
-    #     config.smooth_label_value = 0.9
-    #     trainer = Trainer(config)
-    #     trainer.train()
-
-    # for i in range(5):
-    #     config = SmallModelConfig()
-    #     config.set_env()
-    #     config.seed = i
-    #     config.discriminator_filters = 128
-    #     trainer = Trainer(config)
-    #     trainer.train()
-
-    # latent_sizes = [32, 64]
-    # filters = [64, 128]
-    # self_atention = [True, False]
-
-    # for ls in latent_sizes:
-    #     for filter in filters:
-    #         for sa in self_atention:
-    #             config = SmallModelConfig()
-    #             config.latent_sizes = ls
-    #             config.generator_filters = filter
-    #             config.discriminator_filters = filter
-    #             config.use_self_attention_d = sa
-    #             config.use_self_attention_g = sa
-    #             config.set_env()
-    #             trainer = Trainer(config)
-    #             trainer.train()
-
-    # use_minibatch_std = [False, True]
-    # use_conditional = [False, True]
-    # use_recon_loss = [False, True]
-    # adv_losses = ["baseline", "hinge"]
-
-    # for mstd in use_minibatch_std:
-    #     for uc in use_conditional:
-    #         for rec in use_recon_loss:
-    #             for loss in adv_losses:
-    #                 config = SmallModelConfig()
-    #                 config.use_minibatch_std = mstd
-    #                 config.use_recon_loss = rec
-    #                 config.use_conditional = uc
-    #                 config.adv_loss = loss
-    #                 config.set_env()
-    #                 trainer = Trainer(config)
-    #                 trainer.train()
+    # config = SmallModelConfig()
+    # config.set_env()
+    # config.dataset_type = "generated_fixed"
+    # config.eval_playable_interval = 20 * config.train_batch_size
+    # config.save_image_interval = 20 * config.train_batch_size
+    # # config.use_minibatch_std = False
+    # # config.use_sn_d = True
+    # trainer = Trainer(config)
+    # trainer.train()

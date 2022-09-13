@@ -82,7 +82,7 @@ def check_object_similarity(level1: str, level2: str):
     n = 0
     hit = 0
     for c1, c2 in zip(level1, level2):
-        if c1 in ["\n", ".", "w"]:
+        if c1 in ["\n", ".", "w", '1', '2', '3']:
             continue
         if c1 == c2:
             hit += 1

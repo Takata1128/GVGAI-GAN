@@ -1,5 +1,6 @@
 from __future__ import annotations
 from glob import glob
+from unittest.mock import NonCallableMagicMock
 import gym_gvgai
 import numpy as np
 import os
@@ -77,19 +78,28 @@ class Env:
 
         self.map_level = np.vectorize(lambda x: self.ascii[x])
 
-    def get_original_levels(self):
-        dir_path = os.path.join(
-            gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}")
-        file_pathes = glob(dir_path+"/*")
-        levels = []
-        for f_name in file_pathes:
-            if f_name == os.path.join(
-                    gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}", f"{self.name}.txt"):
-                continue
-            with open(f_name, 'r') as f:
-                content = f.read()
-            levels.append(content)
-        return levels
+    def get_original_levels(self, path=None):
+        if path is not None:
+            file_pathes = glob(path+"/*")
+            levels = []
+            for f_name in file_pathes:
+                with open(f_name, 'r') as f:
+                    content = f.read()
+                levels.append(content)
+            return levels
+        else:
+            dir_path = os.path.join(
+                gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}")
+            file_pathes = glob(dir_path+"/*")
+            levels = []
+            for f_name in file_pathes:
+                if f_name == os.path.join(
+                        gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}", f"{self.name}.txt"):
+                    continue
+                with open(f_name, 'r') as f:
+                    content = f.read()
+                levels.append(content)
+            return levels
 
     def level_str_to_ndarray(self, lvl_str: str):
         ret = np.zeros(

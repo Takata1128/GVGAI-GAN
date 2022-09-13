@@ -191,6 +191,7 @@ class Generator(nn.Module):
         shapes: list[tuple[int]],
         z_shape,
         filters=64,
+        use_linear4z2features_g=True,
         use_self_attention=True,
         use_conditional=False,
         use_deconv_g=True
@@ -199,12 +200,13 @@ class Generator(nn.Module):
         self.z_size = z_shape[0]
         self.filters = filters
         self.init_shape = shapes[0]
+        self.use_linear4z2features_g = use_linear4z2features_g
         self.use_self_attention = use_self_attention
         self.use_conditional = use_conditional
         self.use_deconv_g = use_deconv_g
         self.out_dim = out_dim
 
-        if use_deconv_g:
+        if not use_linear4z2features_g:
             self.preprocess = nn.Sequential(
                 nn.ConvTranspose2d(self.z_size, filters*4,
                                    self.init_shape, 1, 0, bias=False),
@@ -216,6 +218,9 @@ class Generator(nn.Module):
                 nn.Linear(self.z_size, mul(filters*4, mul(*self.init_shape))),
                 nn.ReLU(),
             )
+
+        # if self.use_self_attention:
+        #     self.self_attn0 = Self_Attn(filters*4)
 
         self.block1 = GenBlock(
             filters*4, filters*2, use_deconv_g
@@ -238,16 +243,20 @@ class Generator(nn.Module):
                                                kernel_size=1, stride=1), nn.ReLU())
 
     def forward(self, z, label=None):
-        if self.use_deconv_g:
+        if not self.use_linear4z2features_g:
             x = z.view(-1, self.z_size, 1, 1)
             x = self.preprocess(x)
         else:
             x = self.preprocess(z)
             x = x.view(-1, self.filters*4, *self.init_shape)
+
+        # if self.use_self_attention:
+        #     x = self.self_attn0(x)
         x = self.block1(x)
 
         if self.use_self_attention:
             x = self.self_attn1(x)
+
         x = self.block2(x)
         if self.use_conditional:
             x = self.self_attn2(x, label)
@@ -275,14 +284,16 @@ class Discriminator(nn.Module):
         use_minibatch_std=False,
         use_recon_loss=False,
         use_conditional=False,
-        use_spectral_norm=True
+        use_sn=True,
+        use_pooling=False
     ):
         super(Discriminator, self).__init__()
         self.use_minibatch_std = use_minibatch_std
         self.use_recon_loss = use_recon_loss
         self.use_self_attention = use_self_attention
         self.use_conditional = use_conditional
-        self.use_sn = use_spectral_norm
+        self.use_pooling = use_pooling
+        self.use_sn = use_sn
         self.input_ch = in_ch
         self.input_shape = shapes[0]
 
@@ -316,18 +327,24 @@ class Discriminator(nn.Module):
         self.block2 = DisBlock(filters*2, filters*4,
                                use_bn=use_bn, use_sn=self.use_sn)
 
+        # if self.use_self_attention:
+        #     self.self_attn3 = Self_Attn(filters*4)
+
         if self.use_recon_loss:
             self.decoder = Decoder(filters*4, self.input_ch)
 
         if self.use_minibatch_std:
             self.minibatch_std = MiniBatchStd()
 
-        if self.use_sn:
-            self.postprocess = spectral_norm(
-                nn.Conv2d(filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0))
+        if self.use_pooling:
+            self.postprocess = nn.AdaptiveAvgPool2d(1)
         else:
-            self.postprocess = nn.Conv2d(
-                filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0)
+            if self.use_sn:
+                self.postprocess = spectral_norm(
+                    nn.Conv2d(filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0))
+            else:
+                self.postprocess = nn.Conv2d(
+                    filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0)
 
     def forward(self, x, label=None):
         x = self.preprocess(x)
@@ -343,6 +360,9 @@ class Discriminator(nn.Module):
             x = self.self_attn2(x)
 
         x = self.block2(x)
+
+        # if self.use_self_attention:
+        #     x = self.self_attn3(x)
 
         branch_x = x
 

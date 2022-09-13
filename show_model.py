@@ -1,5 +1,5 @@
 import argparse
-from gan.config import SmallModelConfig, TrainingConfig, OnlySAModelConfig
+from gan.config import SmallModelConfig, TrainingConfig, NormalModelConfig
 from gan.level_dataset_extend import prepare_dataset
 from gan.trainer import Trainer
 
@@ -7,7 +7,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, default="none")
     args = parser.parse_args()
-    config = SmallModelConfig
+    config = NormalModelConfig
     # config.env_name = 'aliens'
     config.set_env(config)
     # prepare_dataset(
