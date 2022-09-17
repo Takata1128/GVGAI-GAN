@@ -193,10 +193,10 @@ class SmallModelConfig(TrainingConfig):
     train_batch_size: int = 32  # training batch size
     steps: int = 10000*(train_batch_size//32)  # training steps
 
-    save_image_interval: int = 20*train_batch_size  # save images interval
+    save_image_interval: int = 40*train_batch_size  # save images interval
     save_model_interval: int = 100*train_batch_size  # save models interval
-    eval_playable_interval: int = 20*train_batch_size  # check playable interval
-    bootstrap_interval: int = 20*train_batch_size  # bootstrap
+    eval_playable_interval: int = 40*train_batch_size  # check playable interval
+    bootstrap_interval: int = 40*train_batch_size  # bootstrap
     dataset_size: int = 32
 
     use_recon_loss: bool = True

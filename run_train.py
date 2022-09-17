@@ -73,9 +73,9 @@ if __name__ == "__main__":
     # config.steps = 10000
     # trainer = Trainer(config)
     # trainer.train()
-
     config = SmallModelConfig()
     config.set_env()
+    config.seed = 0
     config.dataset_type = "train"
     if config.dataset_type == "train":
         prepare_dataset(
@@ -86,6 +86,7 @@ if __name__ == "__main__":
 
     config = SmallModelConfig()
     config.set_env()
+    config.seed = 0
     config.dataset_type = "train"
     if config.dataset_type == "train":
         prepare_dataset(
@@ -98,6 +99,7 @@ if __name__ == "__main__":
 
     config = SmallModelConfig()
     config.set_env()
+    config.seed = 0
     config.dataset_type = "train"
     if config.dataset_type == "train":
         prepare_dataset(
@@ -109,6 +111,103 @@ if __name__ == "__main__":
 
     config = SmallModelConfig()
     config.set_env()
+    config.seed = 0
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.div_loss = 'none'
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 1
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 1
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.bootstrap_filter = 1.0
+    config.div_loss = 'none'
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 1
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.bootstrap_filter = 1.0
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 1
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.div_loss = 'none'
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 2
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 2
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.bootstrap_filter = 1.0
+    config.div_loss = 'none'
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 2
+    config.dataset_type = "train"
+    if config.dataset_type == "train":
+        prepare_dataset(
+            seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+        )
+    config.bootstrap_filter = 1.0
+    trainer = Trainer(config)
+    trainer.train()
+
+    config = SmallModelConfig()
+    config.set_env()
+    config.seed = 2
     config.dataset_type = "train"
     if config.dataset_type == "train":
         prepare_dataset(
