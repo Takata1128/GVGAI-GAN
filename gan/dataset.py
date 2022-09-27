@@ -19,7 +19,8 @@ class LevelDataset(Dataset):
         latent_size=100,
     ):
         self.env = env
-        self.image_dir = os.path.join(root, env.name, datamode)
+        self.image_dir = os.path.join(
+            root, f'{env.name}_{env.version}', datamode)
         self.image_paths = [
             os.path.join(self.image_dir, name) for name in os.listdir(self.image_dir)
         ]
@@ -43,18 +44,22 @@ class LevelDataset(Dataset):
 
     def _open(self, img_path):
         with open(img_path, "r") as f:
-            datalist = f.readlines()
+            level_str = f.readlines()
         ret = np.zeros(
             (len(self.env.ascii),
              self.env.state_shape[1], self.env.state_shape[2]),
         )
 
+        # padding
+        ret[1, :, :] = 1
+
         # label : onehot vector of counts of map tile object.
         label = np.zeros(len(self.env.ascii))
-        for i, s in enumerate(datalist):
+        for i, s in enumerate(level_str):
             for j, c in enumerate(s):
                 if c == "\n":
                     break
+                ret[1, i, j] = 0
                 ret[self.env.ascii.index(c), i, j] = 1
                 label[self.env.ascii.index(c)] += 1
         return ret, label

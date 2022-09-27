@@ -104,42 +104,55 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
     visualizer = LevelVisualizer(env_def)
 
     train_dir_path = os.path.dirname(
-        __file__) + f"/data/level/{game_name}/train/"
+        __file__) + f"/data/level/{game_name}_{version}/train/"
 
     # clean dirs
     if os.path.exists(train_dir_path):
         shutil.rmtree(train_dir_path)
     os.makedirs(train_dir_path)
 
+    # lvl_strs = visualizer.game.get_original_levels(
+    #     '/root/mnt/GVGAI-GAN/gan/data/level/zelda/originals')
     lvl_strs = visualizer.game.get_original_levels(
-        '/root/mnt/GVGAI-GAN/gan/data/level/zelda/originals')
-
-    states = []
-    for i, lvl_str in enumerate(lvl_strs):
-        state_numpy = visualizer.game.level_str_to_ndarray(lvl_str)
-        state_tensor = torch.unsqueeze(torch.Tensor(state_numpy), 0)
-        states.append(state_tensor)
-        # lvl_str_re = visualizer.game.level_tensor_to_strs(state_tensor)
-        # with open(
-        #     train_dir_path + f"{str(i)}.base", mode="w"
-        # ) as f:
-        #     f.write(lvl_str_re[0])
-        if flip:
-            states.append(torch.flip(state_tensor, [2]))
-            states.append(torch.flip(state_tensor, [3]))
-            states.append(torch.flip(state_tensor, [2, 3]))
+        f'/root/mnt/pcg/GVGAI-GAN/gan/data/level/{game_name}_{version}/originals')
 
     for j in range(dataset_size):
-        index = j % len(states)
-        lvl_str_re = visualizer.game.level_tensor_to_strs(states[index])
+        index = j % len(lvl_strs)
+        lvl_str_re = lvl_strs[index]
         if extend_data:
-            s = make_another[game_name](lvl_str_re[0])
+            s = make_another[game_name](lvl_str_re)
         else:
-            s = lvl_str_re[0]
+            s = lvl_str_re
         with open(
             train_dir_path + f"{game_name}_{str(j)}", mode="w"
         ) as f:
             f.write(s)
+
+    # for i, lvl_str in enumerate(lvl_strs):
+    #     state_numpy = visualizer.game.level_str_to_ndarray(lvl_str)
+    #     state_tensor = torch.unsqueeze(torch.Tensor(state_numpy), 0)
+    #     states.append(state_tensor)
+    #     # lvl_str_re = visualizer.game.level_tensor_to_strs(state_tensor)
+    #     # with open(
+    #     #     train_dir_path + f"{str(i)}.base", mode="w"
+    #     # ) as f:
+    #     #     f.write(lvl_str_re[0])
+    #     if flip:
+    #         states.append(torch.flip(state_tensor, [2]))
+    #         states.append(torch.flip(state_tensor, [3]))
+    #         states.append(torch.flip(state_tensor, [2, 3]))
+
+    # for j in range(dataset_size):
+    #     index = j % len(states)
+    #     lvl_str_re = visualizer.game.level_tensor_to_strs(states[index])
+    #     if extend_data:
+    #         s = make_another[game_name](lvl_str_re[0])
+    #     else:
+    #         s = lvl_str_re[0]
+    #     with open(
+    #         train_dir_path + f"{game_name}_{str(j)}", mode="w"
+    #     ) as f:
+    #         f.write(s)
 
 
 if __name__ == "__main__":

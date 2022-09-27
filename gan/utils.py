@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from collections import deque
 from .env import GameDescription
@@ -12,13 +13,29 @@ def tensor_to_level_str(name, tensor):
     lvl_strs = ["\n".join(["".join(row) for row in lvl]) for lvl in lvls]
     return lvl_strs
 
-    from collections import deque
+
+HEIGHT = {'v0': 9, 'v1': 12}
+WIDTH = {'v0': 13, 'v1': 16}
 
 
-def check_playable(lvl_str):
+def check_playable(lvl_str: str, env_name: str):
+    if env_name == 'mario':
+        return check_playable_mario(lvl_str)
+    elif env_name == 'zelda':
+        return check_playable_zelda(lvl_str)
+    else:
+        raise NotImplementedError(f"Env {env_name} is not implemented!")
+
+
+def check_playable_mario(lvl_str: str):
+    pass
+
+
+def check_playable_zelda(lvl_str: str, version: str = 'v1'):
     g = lvl_str.split()
-    H = len(g)
-    W = len(g[0])
+
+    H = HEIGHT[version]
+    W = WIDTH[version]
 
     sx, sy = -1, -1
     gx, gy = -1, -1
@@ -26,9 +43,9 @@ def check_playable(lvl_str):
 
     countA, countG, countK = 0, 0, 0
     ok = True
-    for i in range(H):
-        for j in range(W):
-            if (i == 0 or i == H - 1 or j == 0 or j == W - 1) and g[i][j] != "w":
+    for i in range(len(g)):
+        for j in range(len(g[0])):
+            if (i == 0 or i >= H - 1 or j == 0 or j >= W - 1) and g[i][j] != "w":
                 ok = False
             if g[i][j] == "A":
                 sx, sy = i, j
@@ -66,39 +83,50 @@ def check_playable(lvl_str):
     return dist[gx][gy] != -1 and dist[kx][ky] != -1
 
 
-def check_level_similarity(level1: str, level2: str):
+def check_level_similarity(level1: list[str], level2: list[str], version: str):
     n = 0
     hit = 0
-    for c1, c2 in zip(level1, level2):
-        if c1 == "\n":
-            continue
-        if c1 == c2:
-            hit += 1
-        n += 1
+    for i in range(HEIGHT[version]):
+        for j in range(WIDTH[version]):
+            c1 = level1[i][j]
+            c2 = level2[i][j]
+            if c1 == "\n":
+                continue
+            if c1 == c2:
+                hit += 1
+            n += 1
     return hit / n
 
 
-def check_object_similarity(level1: str, level2: str):
+def check_object_similarity(level1: list[str], level2: list[str], version: str):
     n = 0
     hit = 0
-    for c1, c2 in zip(level1, level2):
-        if c1 in ["\n", ".", "w", '1', '2', '3']:
-            continue
-        if c1 == c2:
-            hit += 1
-        n += 1
+
+    for i in range(HEIGHT[version]):
+        for j in range(WIDTH[version]):
+            c1 = level1[i][j]
+            c2 = level2[i][j]
+            if c1 in ["\n", ".", "w", '1', '2', '3']:
+                continue
+            if c1 == c2:
+                hit += 1
+            n += 1
     return hit / n if n > 0 else None
 
 
-def check_shape_similarity(level1: str, level2: str):
+def check_shape_similarity(level1: list[str], level2: list[str], version: str):
     n = 0
     hit = 0
-    for c1, c2 in zip(level1, level2):
-        if c1 == "\n" or c1 not in [".", "w"]:
-            continue
-        if c1 == c2:
-            hit += 1
-        n += 1
+
+    for i in range(HEIGHT[version]):
+        for j in range(WIDTH[version]):
+            c1 = level1[i][j]
+            c2 = level2[i][j]
+            if c1 == "\n" or c1 not in [".", "w"]:
+                continue
+            if c1 == c2:
+                hit += 1
+            n += 1
     return hit / n if n > 0 else None
 
 
@@ -118,7 +146,7 @@ def make_zelda_level(wall_p=0.20, height=12, width=16):
     level_rows = [["." for i in range(width)] for j in range(height)]
     for i in range(height):
         for j in range(width):
-            if(i == 0 or i == height-1 or j == 0 or j == width-1):
+            if (i == 0 or i == height-1 or j == 0 or j == width-1):
                 level_rows[i][j] = 'w'
 
             if np.random.rand() < wall_p:

@@ -192,7 +192,7 @@ class Generator(nn.Module):
         z_shape,
         filters=64,
         use_linear4z2features_g=True,
-        use_self_attention=True,
+        use_self_attention=[1, 2],
         use_conditional=False,
         use_deconv_g=True
     ):
@@ -219,14 +219,14 @@ class Generator(nn.Module):
                 nn.ReLU(),
             )
 
-        # if self.use_self_attention:
-        #     self.self_attn0 = Self_Attn(filters*4)
+        if 0 in self.use_self_attention:
+            self.self_attn0 = Self_Attn(filters*4)
 
         self.block1 = GenBlock(
             filters*4, filters*2, use_deconv_g
         )
 
-        if self.use_self_attention:
+        if 1 in self.use_self_attention:
             self.self_attn1 = Self_Attn(filters*2)
 
         self.block2 = GenBlock(
@@ -235,7 +235,7 @@ class Generator(nn.Module):
         if self.use_conditional:
             self.self_attn2 = ConditionalSelfAttention(
                 filters, shapes[-1])
-        elif self.use_self_attention:
+        elif 2 in self.use_self_attention:
             self.self_attn2 = Self_Attn(filters)
 
         outconv_ch = filters + (0 if not self.use_conditional else out_dim)
@@ -250,27 +250,27 @@ class Generator(nn.Module):
             x = self.preprocess(z)
             x = x.view(-1, self.filters*4, *self.init_shape)
 
-        # if self.use_self_attention:
-        #     x = self.self_attn0(x)
+        if 0 in self.use_self_attention:
+            x = self.self_attn0(x)
         x = self.block1(x)
 
-        if self.use_self_attention:
+        if 1 in self.use_self_attention:
             x = self.self_attn1(x)
 
         x = self.block2(x)
         if self.use_conditional:
             x = self.self_attn2(x, label)
-        elif self.use_self_attention:
+        elif 2 in self.use_self_attention:
             x = self.self_attn2(x)
         x = self.outconv(x)
         return x
 
-    def summary(self, batch_size=32):
+    def summary(self, batch_size=32, device=None):
         if self.use_conditional:
             summary(self, ((batch_size, self.z_size),
-                    (batch_size, self.out_dim)), dtypes=[torch.float, torch.int])
+                    (batch_size, self.out_dim)), dtypes=[torch.float, torch.int], device=device)
         else:
-            summary(self, (batch_size, self.z_size),)
+            summary(self, (batch_size, self.z_size), device=device)
 
 
 class Discriminator(nn.Module):
@@ -280,7 +280,7 @@ class Discriminator(nn.Module):
         shapes,
         filters=64,
         use_bn=False,
-        use_self_attention=True,
+        use_self_attention=[0, 1],
         use_minibatch_std=False,
         use_recon_loss=False,
         use_conditional=False,
@@ -312,7 +312,7 @@ class Discriminator(nn.Module):
         if self.use_conditional:
             self.self_attn1 = ConditionalSelfAttention(
                 filters, self.input_shape)
-        elif self.use_self_attention:
+        elif 0 in self.use_self_attention:
             self.self_attn1 = Self_Attn(filters)
 
         block1_ch = filters + \
@@ -321,14 +321,14 @@ class Discriminator(nn.Module):
         self.block1 = DisBlock(
             block1_ch, filters*2, use_bn=use_bn, use_sn=self.use_sn)
 
-        if self.use_self_attention:
+        if 1 in self.use_self_attention:
             self.self_attn2 = Self_Attn(filters*2)
 
         self.block2 = DisBlock(filters*2, filters*4,
                                use_bn=use_bn, use_sn=self.use_sn)
 
-        # if self.use_self_attention:
-        #     self.self_attn3 = Self_Attn(filters*4)
+        if 2 in self.use_self_attention:
+            self.self_attn3 = Self_Attn(filters*4)
 
         if self.use_recon_loss:
             self.decoder = Decoder(filters*4, self.input_ch)
@@ -351,18 +351,18 @@ class Discriminator(nn.Module):
 
         if self.use_conditional:
             x = self.self_attn1(x, label)
-        elif self.use_self_attention:
+        elif 0 in self.use_self_attention:
             x = self.self_attn1(x)
 
         x = self.block1(x)
 
-        if self.use_self_attention:
+        if 1 in self.use_self_attention:
             x = self.self_attn2(x)
 
         x = self.block2(x)
 
-        # if self.use_self_attention:
-        #     x = self.self_attn3(x)
+        if 2 in self.use_self_attention:
+            x = self.self_attn3(x)
 
         branch_x = x
 
@@ -382,12 +382,13 @@ class Discriminator(nn.Module):
             return out, recon
         return out
 
-    def summary(self, batch_size=64):
+    def summary(self, batch_size=64, device=None):
         if self.use_conditional:
             summary(self, ((batch_size, self.input_ch, *self.input_shape),
-                    (batch_size, self.input_ch)), dtypes=[torch.float, torch.int])
+                    (batch_size, self.input_ch)), dtypes=[torch.float, torch.int], device=device)
         else:
-            summary(self, (batch_size, self.input_ch, *self.input_shape))
+            summary(self, (batch_size, self.input_ch,
+                    *self.input_shape), device=device)
 
 
 class Decoder(nn.Module):

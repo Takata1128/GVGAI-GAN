@@ -4,7 +4,7 @@ import numpy as np
 import os
 from gan.small_models import Generator
 from gan.config import SmallModelConfig
-from gan.utils import tensor_to_level_str, check_playable
+from gan.utils import tensor_to_level_str, check_playable_zelda
 
 
 def optimize(config: SmallModelConfig):
@@ -38,7 +38,7 @@ def optimize(config: SmallModelConfig):
         latent = torch.FloatTensor(x).view(1, -1, 1, 1)
         level = generator(x)
         level_str = tensor_to_level_str(level)
-        playable = check_playable(level_str)
+        playable = check_playable_zelda(level_str)
         eval = eval(level_str)
         return playable*300 + eval
 

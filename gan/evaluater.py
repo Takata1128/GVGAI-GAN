@@ -6,7 +6,7 @@ from typing import List
 from torchinfo import summary
 from utils import (
     tensor_to_level_str,
-    check_playable,
+    check_playable_zelda,
     check_level_similarity,
     check_object_similarity,
     check_shape_similarity,
@@ -133,7 +133,7 @@ class Evaluater:
         level_strs = tensor_to_level_str(self.config.env_name, output_levels)
         playable_count = 0
         for level_str in level_strs:
-            if check_playable(level_str):
+            if check_playable_zelda(level_str):
                 playable_count += 1
 
         playable_ratio = playable_count / self.config.eval_playable_counts

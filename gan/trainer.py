@@ -16,7 +16,7 @@ from .dataset import LevelDataset
 from .config import DataExtendConfig, TrainingConfig
 from .utils import (
     tensor_to_level_str,
-    check_playable,
+    check_playable_zelda,
     check_level_similarity,
     check_object_similarity,
     check_shape_similarity,
@@ -170,6 +170,7 @@ class Trainer:
             self.discriminator.parameters(), lr=self.config.discriminator_lr
         )
 
+        self.step = 0
         self.max_playable_count = 0
         self.reset_steps = 0
         self.bootstrap_count = 0
@@ -179,15 +180,12 @@ class Trainer:
         metrics = {}
         with wandb.init(project=f"{self.config.env_name} Level GAN by {self.config.model_type} model", config=self.config.__dict__):
             # check model summary
-            self.generator.summary(batch_size=self.config.train_batch_size)
+            self.generator.summary(
+                batch_size=self.config.train_batch_size, device=self.device)
             self.discriminator.summary(
-                batch_size=self.config.train_batch_size)
+                batch_size=self.config.train_batch_size, device=self.device)
 
-            # summaryによってdeviceが飛んでいるので注意
-            self.generator.to(self.device)
-            self.discriminator.to(self.device)
-
-            step = 0
+            self.step = 0
             self.latents_for_show = torch.randn(
                 9, self.config.latent_size,).to(self.device)
             self.labels_for_show = self._get_labels(9).int()
@@ -202,7 +200,7 @@ class Trainer:
             for epoch in range(1, self.config.epochs + 1):
                 self.generator.train()
                 for latent, real, label in self.train_loader:
-                    step += 1
+                    self.step += 1
                     latent, real, label = (
                         latent.to(self.device).float(),
                         real.to(self.device).float(),
@@ -225,12 +223,12 @@ class Trainer:
                     if self.config.use_recon_loss:
                         metrics["Reconstruction Loss"] = recon_loss
                     metrics["Epoch"] = epoch
-                    wandb.log(metrics)
+                    wandb.log(metrics, step=self.step)
 
-                    if step >= self.config.steps:
+                    if self.step >= self.config.steps:
                         break
 
-                if step >= self.config.steps:
+                if self.step >= self.config.steps:
                     break
 
                 self.generator.eval()
@@ -251,7 +249,7 @@ class Trainer:
                         levels = self._generate_levels(latents, labels)
                         playable_levels = []
                         for level_str in levels:
-                            if check_playable(level_str):
+                            if check_playable_zelda(level_str, self.config.env_version):
                                 playable_levels.append(level_str)
                         wandb.log(
                             {
@@ -269,14 +267,15 @@ class Trainer:
                         if self.config.bootstrap and len(unique_playable_levels) > 1:
                             unique_playable_levels = self._bootstrap(
                                 unique_playable_levels)
-                        # if isinstance(self.config, DataExtendConfig):
-                        #     for playable_level in unique_playable_levels:
-                        #         with open(
-                        #             os.path.join(self.config.level_data_path,
-                        #                          self.config.env_name, "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
-                        #         ) as f:
-                        #             f.write(playable_level)
-                        #             self.data_index += 1
+                        # generatedフォルダにも追加
+                        if isinstance(self.config, DataExtendConfig):
+                            for playable_level in unique_playable_levels:
+                                with open(
+                                    os.path.join(self.config.level_data_path,
+                                                 f'{self.config.env_name}_{self.config.env_version}', "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
+                                ) as f:
+                                    f.write(playable_level)
+                                    self.data_index += 1
 
                         # if isinstance(self.config, DataExtendConfig) and self.config.reset_weight_threshold < len(playable_levels)/self.config.eval_playable_counts:
                         if isinstance(self.config, DataExtendConfig) and self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
@@ -285,13 +284,14 @@ class Trainer:
                             if self.config.use_recon_loss:
                                 self._save_recon_images(real, label)
                             self._build_model()
-                            self.reset_steps = step
+                            self.reset_steps = self.step
+                            self.bootstrap_count = 0
 
-                    if isinstance(self.config, DataExtendConfig) and step-self.reset_steps >= 5000:
+                    if isinstance(self.config, DataExtendConfig) and self.step-self.reset_steps >= 5000:
                         print(
-                            f"reset weights of model. {step-self.reset_steps} steps progressed.")
+                            f"reset weights of model. {self.step-self.reset_steps} steps progressed.")
                         self._build_model()
-                        self.reset_steps = step
+                        self.reset_steps = self.step
 
                     if epoch % self.model_save_epoch == 0:
                         self._save_models(
@@ -362,16 +362,18 @@ class Trainer:
         wandb.log({"Reconstructed Levels": images})
 
     def _eval_models(self, level_strs, playable_levels):
-
+        for i in range(len(level_strs)):
+            level_strs[i] = level_strs[i].split()
         (
             level_similarity,
             object_similarity,
             shape_similarity,
             duplicate_ratio,
-        ) = self._calc_level_similarity(level_strs)
+        ) = self._calc_level_similarity(level_strs, self.config.env_version)
 
         wandb.log({"Level Similarity Ratio": level_similarity})
-        wandb.log({"Special Object Similarity Ratio": object_similarity})
+        wandb.log(
+            {"Special Object Similarity Ratio": object_similarity})
         wandb.log({"Shape Similarity Ratio": shape_similarity})
         wandb.log({"Duplicate Ratio": duplicate_ratio})
 
@@ -390,7 +392,7 @@ class Trainer:
         elif self.config.bootstrap == "smart":
             dataset_levels = []
             for file in self.dataset_files:
-                with open(os.path.join(self.config.level_data_path, self.config.env_name, self.config.dataset_type, file), mode='r') as f:
+                with open(os.path.join(self.config.level_data_path, f'{self.config.env_name}_{self.config.env_version}', self.config.dataset_type, file), mode='r') as f:
                     s = f.read()
                     dataset_levels.append(s)
             result_levels = []
@@ -400,7 +402,8 @@ class Trainer:
                 for generated_level in unique_playable_levels:
                     dup = False
                     for ds_level in dataset_levels:
-                        sim = check_level_similarity(generated_level, ds_level)
+                        sim = check_level_similarity(
+                            generated_level.split(), ds_level.split(), self.config.env_version)
                         if sim >= self.config.bootstrap_filter:
                             dup = True
                             break
@@ -427,41 +430,7 @@ class Trainer:
             self.train_loader = DataLoader(
                 train_dataset, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
             )
-            # self.steps_per_epoch = len(self.train_loader)
-            # self.model_save_epoch = max(1, self.config.save_model_interval//(
-            #     self.config.train_batch_size*self.steps_per_epoch))
-            # self.image_save_epoch = max(1, self.config.save_image_interval//(
-            #     self.config.train_batch_size*self.steps_per_epoch))
-            # self.eval_epoch = max(1, self.config.eval_playable_interval//(
-            #     self.config.train_batch_size*self.steps_per_epoch))
-            # dataset files
-            # self.dataset_files = os.listdir(train_dataset.image_dir)
-            # print("Training Dataset :", train_dataset.image_dir)
-            # DataLoader
-
-            return result_levels
-            # for i in range(len(playable_levels)):
-            #     key = 0
-            #     for j in range(len(playable_levels)):
-            #         if i == j:
-            #             continue
-            #         key += check_level_similarity(
-            #             playable_levels[i], playable_levels[j])
-            #     playable_levels_pairs.append([playable_levels[i], key])
-
-            # playable_levels_pairs.sort(key=operator.itemgetter(1))
-
-            # exchange_count = min(
-            #     self.config.bootstrap_max_count, len(playable_levels_pairs))
-
-            # for i in range(exchange_count):
-            #     index = np.random.randint(0, len(self.dataset_files)-5)
-            #     file = self.dataset_files[index]
-            #     with open(
-            #         os.path.join(self.config.level_data_path,
-            #                      self.config.env_name, self.config.dataset_type, file), mode="w"
-            #     ) as f:
-            #         f.write(playable_levels_pairs[i][0])
+            return selected
         else:
             NotImplementedError(
                 f'{self.config.bootstrap} bootstrap is not implemented!!')
@@ -472,7 +441,7 @@ class Trainer:
         self.dataset_files.append(file)
         with open(
             os.path.join(self.config.level_data_path,
-                         self.config.env_name, self.config.dataset_type, file),
+                         f'{self.config.env_name}_{self.config.env_version}', self.config.dataset_type, file),
             "w",
         ) as f:
             f.write(level_str)
@@ -552,7 +521,7 @@ class Trainer:
             os.path.join(model_save_path, f"models_{epoch}.tar"),
         )
 
-    def _calc_level_similarity(self, level_strs):
+    def _calc_level_similarity(self, level_strs, version):
         res_level, res_object, res_shape, res_duplicate = 0, 0, 0, 0
         n_level = 0
         n_object_level = 0
@@ -560,19 +529,20 @@ class Trainer:
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
                 res_level += check_level_similarity(
-                    level_strs[i], level_strs[j])
-                obj_tmp = check_object_similarity(level_strs[i], level_strs[j])
+                    level_strs[i], level_strs[j], version)
+                obj_tmp = check_object_similarity(
+                    level_strs[i], level_strs[j], version)
                 if obj_tmp is not None:
                     res_object += obj_tmp
                     n_object_level += 1
                 shape_tmp = check_shape_similarity(
-                    level_strs[i], level_strs[j])
+                    level_strs[i], level_strs[j], version)
                 if shape_tmp is not None:
                     res_shape += shape_tmp
                     n_shape_level += 1
                 res_duplicate += (
                     1
-                    if check_level_similarity(level_strs[i], level_strs[j]) >= 0.90
+                    if check_level_similarity(level_strs[i], level_strs[j], version) >= 0.90
                     else 0
                 )
                 n_level += 1
@@ -598,7 +568,7 @@ class Trainer:
         for i in range(n_labels):
             file = self.dataset_files[np.random.randint(
                 len(self.dataset_files))]
-            with open(os.path.join(self.config.level_data_path, self.config.env_name, self.config.dataset_type, file), "r") as f:
+            with open(os.path.join(self.config.level_data_path, f'{self.config.env_name}_{self.config.env_version}', self.config.dataset_type, file), "r") as f:
                 datalist = f.readlines()
             # label : onehot vector of counts of map tile object.
             label = np.zeros(len(self.env.ascii))

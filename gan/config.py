@@ -31,8 +31,8 @@ class TrainingConfig:
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
     model_type: str = "small"  # "normal","simple","branch","small"
-    use_self_attention_g: bool = False
-    use_self_attention_d: bool = False
+    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
+    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_deconv_g: bool = True
     use_bn_d: bool = False
     use_sn_d: bool = True
@@ -63,7 +63,7 @@ class TrainingConfig:
     # others parameters
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
-    gpu_id: int = 0  # gpu index
+    gpu_id: int = 5  # gpu index
 
     eval_playable_counts: int = 300  # number of z to check playable.
     clone_data: bool = False
@@ -81,6 +81,7 @@ class TrainingConfig:
 @dataclass
 class DataExtendConfig(TrainingConfig):
     dataset_type: str = "train"  # [train, generated]
+    seed: int = 0
 
     # model define
     latent_size: int = 32  # latent dims for generation
@@ -89,8 +90,8 @@ class DataExtendConfig(TrainingConfig):
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
     model_type: str = "small"  # "normal","simple","branch","small"
-    use_self_attention_g: bool = True
-    use_self_attention_d: bool = True
+    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
+    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_linear4z2features_g: bool = False
     use_deconv_g: bool = True
     use_bn_d: bool = False
@@ -109,7 +110,7 @@ class DataExtendConfig(TrainingConfig):
     recon_lambda: float = 1.0
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 25000  # training steps
+    steps: int = 10000  # training steps
 
     eval_playable_counts: int = 100  # number of z to check playable.
 
@@ -121,7 +122,7 @@ class DataExtendConfig(TrainingConfig):
     save_model_interval: int = 1000000  # save models interval
     eval_playable_interval: int = 100 * train_batch_size  # check playable interval
     bootstrap_interval: int = 20*train_batch_size  # bootstrap
-    dataset_size: int = 128
+    dataset_size: int = 100
 
     bootstrap: str = "smart"  # ["none", "random", "smart"]
     bootstrap_filter = 0.90
@@ -169,14 +170,14 @@ class SmallModelConfig(TrainingConfig):
     generator_filters: int = 128
     discriminator_filters: int = 128
     model_type: str = "small"  # "normal","simple","branch","small"
-    use_self_attention_g: bool = True
-    use_self_attention_d: bool = True
+    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
+    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_linear4z2features_g: bool = False
     use_deconv_g: bool = True
     use_bn_d: bool = False
     use_sn_d: bool = False
     use_pooling_d: bool = False
-    use_minibatch_std: bool = True
+    use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
 
@@ -191,13 +192,13 @@ class SmallModelConfig(TrainingConfig):
     bootstrap_max_count: int = 1
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 10000*(train_batch_size//32)  # training steps
+    steps: int = 20000*(train_batch_size//32)  # training steps
 
-    save_image_interval: int = 40*train_batch_size  # save images interval
-    save_model_interval: int = 100*train_batch_size  # save models interval
-    eval_playable_interval: int = 40*train_batch_size  # check playable interval
+    save_image_interval: int = 200*train_batch_size  # save images interval
+    save_model_interval: int = 1000*train_batch_size  # save models interval
+    eval_playable_interval: int = 200*train_batch_size  # check playable interval
     bootstrap_interval: int = 40*train_batch_size  # bootstrap
-    dataset_size: int = 32
+    dataset_size: int = 50
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0
