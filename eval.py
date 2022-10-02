@@ -9,7 +9,7 @@ from play_rl.env import Env
 import torch
 import numpy as np
 from PIL import Image
-from gan.level_visualizer import LevelVisualizer
+from gan.level_visualizer import GVGAILevelVisualizer
 import matplotlib.pyplot as plt
 
 
@@ -21,7 +21,7 @@ def play(level_str: str, env: GridGame, actor: Policy, visualize: bool = False, 
     rnn_hxs = torch.zeros((1, actor.recurrent_hidden_state_size))
     frames = None
     if visualize:
-        level_visualizer = LevelVisualizer(env_def)
+        level_visualizer = GVGAILevelVisualizer(env_def)
         frames = []
 
     while not done:
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     game_name = 'zelda'
     device = torch.device('cpu')
     env_def = Env(name=game_name)
-    level_visualizer = LevelVisualizer(env_def)
+    level_visualizer = GVGAILevelVisualizer(env_def)
     env = GridGame(game_name=game_name, play_length=100,
                    shape=env_def.state_shape)
 

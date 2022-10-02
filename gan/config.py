@@ -25,9 +25,9 @@ class TrainingConfig:
     )  # save model path
 
     # model define
-    latent_size: int = 128  # latent dims for generation
-    generator_filters: int = 256
-    discriminator_filters: int = 16
+    latent_size: int = 32  # latent dims for generation
+    generator_filters: int = 128
+    discriminator_filters: int = 128
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
     model_type: str = "small"  # "normal","simple","branch","small"
@@ -76,6 +76,11 @@ class TrainingConfig:
         env = Env(self.env_name, self.env_version)
         self.input_shape = env.state_shape
         self.model_shapes = env.model_shape
+        if self.env_name == 'mario':
+            self.generator_filters = 64
+            self.discriminator_filters = 64
+        else:
+            pass
 
 
 @dataclass
@@ -94,6 +99,7 @@ class DataExtendConfig(TrainingConfig):
     use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_linear4z2features_g: bool = False
     use_deconv_g: bool = True
+    use_sn_d: bool = False
     use_bn_d: bool = False
     use_pooling_d: bool = False
     use_minibatch_std: bool = True
@@ -110,17 +116,17 @@ class DataExtendConfig(TrainingConfig):
     recon_lambda: float = 1.0
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 10000  # training steps
+    steps: int = 100000  # training steps
 
     eval_playable_counts: int = 100  # number of z to check playable.
 
     reset_weight_interval: int = 1000000 * train_batch_size
     reset_weight_threshold: float = 0.05
 
-    save_image_interval: int = 100 * \
+    save_image_interval: int = 200 * \
         train_batch_size  # save images interval
     save_model_interval: int = 1000000  # save models interval
-    eval_playable_interval: int = 100 * train_batch_size  # check playable interval
+    eval_playable_interval: int = 200 * train_batch_size  # check playable interval
     bootstrap_interval: int = 20*train_batch_size  # bootstrap
     dataset_size: int = 100
 
@@ -129,6 +135,7 @@ class DataExtendConfig(TrainingConfig):
     bootstrap_max_count: int = 1
     add_generated_max_count: int = 1
     reset_weight_bootstrap_count: int = 3
+    stop_generate_count = 150
 
 
 @dataclass
@@ -205,11 +212,6 @@ class SmallModelConfig(TrainingConfig):
 
     generator_lr: float = 0.00005
     discriminator_lr: float = 0.00005
-
-    def set_env(self):
-        env = Env(self.env_name, self.env_version)
-        self.input_shape = env.state_shape
-        self.model_shapes = env.model_shape
 
 
 @dataclass

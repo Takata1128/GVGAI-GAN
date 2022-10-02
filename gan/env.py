@@ -39,6 +39,12 @@ GameDescription["zelda"] = {
     "model_shape": [(3, 4), (6, 8), (12, 16)],
     "requirements": ["A", "g", "+"],
 }
+GameDescription["mario"] = {
+    "ascii": ["X", "S", "-", "Q", "E", "[", "]", "<", ">", "?"],
+    "mapping": [13, 0, 3, 4, 10, 11, 12, 7],
+    "state_shape": (10, 14, 28),
+    "model_shape": [(3, 7), (7, 14), (14, 28)],
+}
 
 GameDescription["roguelike"] = {
     "ascii": [".", 'w', "x", "s", "g", "r", "p", "h", "k", 'l', 'm', 'A'],

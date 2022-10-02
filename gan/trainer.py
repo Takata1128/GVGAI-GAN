@@ -11,7 +11,7 @@ import random
 
 from . import loss
 from .env import Env
-from .level_visualizer import LevelVisualizer
+from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 from .dataset import LevelDataset
 from .config import DataExtendConfig, TrainingConfig
 from .utils import (
@@ -62,7 +62,11 @@ class Trainer:
         )
 
         # Level Visualizer
-        self.level_visualizer = LevelVisualizer(self.env)
+        if self.config.env_name == 'mario':
+            self.level_visualizer = MarioLevelVisualizer(
+                self.env, self.config.level_data_path)
+        else:
+            self.level_visualizer = GVGAILevelVisualizer(self.env)
 
         # Network
         self._build_model()
@@ -88,6 +92,11 @@ class Trainer:
             self.reset_epoch = self.config.reset_weight_interval//(
                 self.config.train_batch_size*self.steps_per_epoch)
             print(f"model_reset_epoch:{self.reset_epoch}")
+
+        self.step = 0
+        self.max_playable_count = 0
+        self.last_reset_steps = 0
+        self.bootstrap_count = 0
 
     def _build_model(self):
         latent_shape = (self.config.latent_size,)
@@ -169,11 +178,6 @@ class Trainer:
         self.optimizer_d = torch.optim.RMSprop(
             self.discriminator.parameters(), lr=self.config.discriminator_lr
         )
-
-        self.step = 0
-        self.max_playable_count = 0
-        self.reset_steps = 0
-        self.bootstrap_count = 0
 
     def train(self):
         wandb.login()
@@ -262,40 +266,39 @@ class Trainer:
                         if epoch % self.eval_epoch == 0:
                             self._eval_models(levels, playable_levels)
 
+                        # save model
+                        if epoch % self.model_save_epoch == 0:
+                            self._save_models(
+                                model_save_path, epoch, None)
+
                         # bootstrap
                         unique_playable_levels = list(set(playable_levels))
                         if self.config.bootstrap and len(unique_playable_levels) > 1:
                             unique_playable_levels = self._bootstrap(
                                 unique_playable_levels)
-                        # generatedフォルダにも追加
-                        if isinstance(self.config, DataExtendConfig):
-                            for playable_level in unique_playable_levels:
-                                with open(
-                                    os.path.join(self.config.level_data_path,
-                                                 f'{self.config.env_name}_{self.config.env_version}', "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
-                                ) as f:
-                                    f.write(playable_level)
-                                    self.data_index += 1
 
-                        # if isinstance(self.config, DataExtendConfig) and self.config.reset_weight_threshold < len(playable_levels)/self.config.eval_playable_counts:
                         if isinstance(self.config, DataExtendConfig) and self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
                             print("reset weights of model.")
                             self._save_images()
                             if self.config.use_recon_loss:
                                 self._save_recon_images(real, label)
                             self._build_model()
-                            self.reset_steps = self.step
+                            self.last_reset_steps = self.step
                             self.bootstrap_count = 0
 
-                    if isinstance(self.config, DataExtendConfig) and self.step-self.reset_steps >= 5000:
-                        print(
-                            f"reset weights of model. {self.step-self.reset_steps} steps progressed.")
-                        self._build_model()
-                        self.reset_steps = self.step
+                    # 一定数生成したらストップ
+                        if isinstance(self.config, DataExtendConfig):
+                            if self.data_index >= self.config.stop_generate_count:
+                                print(
+                                    f"Generated size exceeds {self.data_index}, so stop generation.")
+                                break
 
-                    if epoch % self.model_save_epoch == 0:
-                        self._save_models(
-                            model_save_path, epoch, None)
+                    # 一定期間たったら強制リセット
+                    if isinstance(self.config, DataExtendConfig) and self.step-self.last_reset_steps >= 3000:
+                        print(
+                            f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
+                        self._build_model()
+                        self.last_reset_steps = self.step
 
     def _generate_levels(self, latents, labels):
         p_level = torch.softmax(
@@ -389,13 +392,16 @@ class Trainer:
                 unique_playable_levels, min(len(unique_playable_levels), self.config.bootstrap_max_count))
             for level in list:
                 self._level_expand(level)
-        elif self.config.bootstrap == "smart":
+        elif self.config.bootstrap == "smart":  # データセット内のステージと比較して類似度が低いもののみを追加
             dataset_levels = []
+            # データセットのレベルたち
             for file in self.dataset_files:
                 with open(os.path.join(self.config.level_data_path, f'{self.config.env_name}_{self.config.env_version}', self.config.dataset_type, file), mode='r') as f:
                     s = f.read()
                     dataset_levels.append(s)
             result_levels = []
+
+            # フィルタ処理
             if self.config.bootstrap_filter == None:
                 result_levels = unique_playable_levels
             else:
@@ -410,11 +416,21 @@ class Trainer:
                     if not dup:
                         result_levels.append(generated_level)
 
+            # 多すぎないように
             selected = random.sample(
                 result_levels, min(len(result_levels), self.config.bootstrap_max_count))
+
             for level in selected:
                 self._level_add(level)
                 self.bootstrap_count += 1
+                # generatedフォルダにも追加
+                if isinstance(self.config, DataExtendConfig):
+                    with open(
+                        os.path.join(self.config.level_data_path,
+                                     f'{self.config.env_name}_{self.config.env_version}', "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
+                    ) as f:
+                        f.write(level)
+                        self.data_index += 1
 
             wandb.log({"Dataset Size": len(self.dataset_files)})
             # update dataloader

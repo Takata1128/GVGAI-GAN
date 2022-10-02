@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 from tqdm import tqdm
-from level_visualizer import LevelVisualizer
+from level_visualizer import GVGAILevelVisualizer
 import os
 import torch
 import numpy as np
@@ -50,7 +50,7 @@ class Evaluater:
             print("device : cpu")
 
         # Level Visualizer
-        self.level_visualizer = LevelVisualizer(config.env_name)
+        self.level_visualizer = GVGAILevelVisualizer(config.env_name)
 
         # Network
         latent_shape = (config.latent_size,)
