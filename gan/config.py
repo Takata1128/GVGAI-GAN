@@ -25,14 +25,14 @@ class TrainingConfig:
     )  # save model path
 
     # model define
-    latent_size: int = 128  # latent dims for generation
-    generator_filters: int = 256
-    discriminator_filters: int = 16
+    latent_size: int = 32  # latent dims for generation
+    generator_filters: int = 128
+    discriminator_filters: int = 128
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
     model_type: str = "small"  # "normal","simple","branch","small"
-    use_self_attention_g: bool = False
-    use_self_attention_d: bool = False
+    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
+    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_deconv_g: bool = True
     use_bn_d: bool = False
     use_sn_d: bool = True
@@ -63,7 +63,7 @@ class TrainingConfig:
     # others parameters
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
-    gpu_id: int = 0  # gpu index
+    gpu_id: int = 5  # gpu index
 
     eval_playable_counts: int = 300  # number of z to check playable.
     clone_data: bool = False
@@ -72,62 +72,78 @@ class TrainingConfig:
     bootstrap: str = "none"  # ["none", "random", "smart"]
     dataset_max_change_count: int = 5
 
-    recall_weight_threshold: float = 10.05
-
     def set_env(self):
         env = Env(self.env_name, self.env_version)
         self.input_shape = env.state_shape
         self.model_shapes = env.model_shape
+        if self.env_name == 'mario':
+            self.env_version = 'v0'
+            self.checkpoints_path = (
+                os.path.dirname(__file__) + "/checkpoints_mario"
+            )  # save model path
+            self.generator_filters = 64
+            self.discriminator_filters = 64
+        else:
+            pass
 
 
 @dataclass
 class DataExtendConfig(TrainingConfig):
     dataset_type: str = "train"  # [train, generated]
+    seed: int = 0
 
     # model define
     latent_size: int = 32  # latent dims for generation
-    generator_filters: int = 256
-    discriminator_filters: int = 16
+    generator_filters: int = 128
+    discriminator_filters: int = 128
     input_shape: tuple[int] = None
     model_shapes: list[tuple[int]] = None
-    model_type: str = "normal"  # "normal","simple","branch","small"
-    use_self_attention_g: bool = True
-    use_self_attention_d: bool = True
-    use_deconv_g: bool = False
+    model_type: str = "small"  # "normal","simple","branch","small"
+    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
+    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
+    use_linear4z2features_g: bool = False
+    use_deconv_g: bool = True
+    use_sn_d: bool = False
     use_bn_d: bool = False
-    use_minibatch_std: bool = False
+    use_pooling_d: bool = False
+    use_minibatch_std: bool = True
     use_spectral_norm: bool = False
     use_conditional: bool = False
 
-    save_image_interval_epoch: int = 100  # save images interval
-    save_model_interval_epoch: int = 5000  # save models interval
-    eval_playable_interval_epoch: int = 100  # check playable interval
-
     # learning parameters
-    adv_loss: str = "baseline"  # ["baseline","hinge"]
-    div_loss: str = "none"  # ["l1","l2","none"]
-    lambda_div: float = 50.0
+    adv_loss: str = "hinge"  # ["baseline","hinge"]
+    div_loss: str = "l1"  # ["l1","l2","none"]
+    lambda_div: float = 10.0
     div_loss_threshold_playability: float = 0.0
 
-    use_recon_loss: bool = False
+    use_recon_loss: bool = True
     recon_lambda: float = 1.0
 
-    train_batch_size: int = 64  # training batch size
+    train_batch_size: int = 32  # training batch size
     steps: int = 100000  # training steps
 
-    recall_weight_threshold: float = 0.05
+    eval_playable_counts: int = 100  # number of z to check playable.
 
-    save_image_interval: int = 20000  # save images interval
+    save_image_interval: int = 200 * \
+        train_batch_size  # save images interval
     save_model_interval: int = 1000000  # save models interval
-    eval_playable_interval: int = 20000  # check playable interval
+    eval_playable_interval: int = 200 * train_batch_size  # check playable interval
+    bootstrap_interval: int = 20*train_batch_size  # bootstrap
+    dataset_size: int = 100
 
     bootstrap: str = "smart"  # ["none", "random", "smart"]
-    dataset_max_change_count: int = 3
+    bootstrap_filter = 0.90
+    bootstrap_max_count: int = 1
+    add_generated_max_count: int = 1
+    reset_weight_bootstrap_count: int = 3
+    reset_weight_interval: int = 3000 * train_batch_size
+    reset_train_dataset_th: int = 30
+    stop_generate_count = 200
 
 
 @dataclass
 class NormalModelConfig(TrainingConfig):
-    dataset_type: str = "generated_good"  # [train, generated]
+    dataset_type: str = "generated_base"  # [train, generated]
 
     # model define
     latent_size: int = 128  # latent dims for generation
@@ -147,6 +163,7 @@ class NormalModelConfig(TrainingConfig):
     div_loss: str = "none"  # ["l1","l2","none"]
     lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
+    dataset_size: int = 64
 
     bootstrap: str = "none"  # ["none", "random", "smart"]
 
@@ -156,47 +173,48 @@ class NormalModelConfig(TrainingConfig):
 
 @dataclass
 class SmallModelConfig(TrainingConfig):
-    dataset_type: str = "generated_fixed"  # [train, generated]
+    dataset_type: str = "train"  # [train, generated]
 
     # model define
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 128
     discriminator_filters: int = 128
     model_type: str = "small"  # "normal","simple","branch","small"
-    use_self_attention_g: bool = True
-    use_self_attention_d: bool = True
+    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
+    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
+    use_linear4z2features_g: bool = False
     use_deconv_g: bool = True
     use_bn_d: bool = False
     use_sn_d: bool = False
-    use_minibatch_std: bool = True
+    use_pooling_d: bool = False
+    use_minibatch_std: bool = False
     use_spectral_norm: bool = False
     use_conditional: bool = False
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "none"  # ["l1","l2","none"]
-    lambda_div: float = 10.0
+    div_loss: str = "l1"  # ["l1","l2","none"]
+    lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 
-    bootstrap: str = "none"  # ["none", "random", "smart"]
+    bootstrap: str = "smart"  # ["none", "random", "smart"]
+    bootstrap_filter: float = 0.90
+    bootstrap_max_count: int = 1
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 50000*(train_batch_size//32)  # training steps
+    steps: int = 20000*(train_batch_size//32)  # training steps
 
-    save_image_interval: int = 1000*32  # save images interval
-    save_model_interval: int = 5000*32  # save models interval
-    eval_playable_interval: int = 1000*32  # check playable interval
+    save_image_interval: int = 200*train_batch_size  # save images interval
+    save_model_interval: int = 1000*train_batch_size  # save models interval
+    eval_playable_interval: int = 200*train_batch_size  # check playable interval
+    bootstrap_interval: int = 40*train_batch_size  # bootstrap
+    dataset_size: int = 50
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0
 
     generator_lr: float = 0.00005
     discriminator_lr: float = 0.00005
-
-    def set_env(self):
-        env = Env(self.env_name, self.env_version)
-        self.input_shape = env.state_shape
-        self.model_shapes = env.model_shape
 
 
 @dataclass

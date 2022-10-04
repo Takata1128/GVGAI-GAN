@@ -4,7 +4,48 @@ from PIL import Image, ImageDraw, ImageFont
 from .env import Env
 
 
-class LevelVisualizer:
+class MarioLevelVisualizer:
+    def __init__(self, env: Env, dir: str, tile_size=16, padding=2):
+        self.game = env
+        self.tile_size = tile_size
+        self.pad = padding
+        self.dir = dir
+        self.char_to_img = self._load_sprites()
+
+    def _load_sprites(self):
+        ret = {}
+        for i, c in enumerate(self.game.ascii):
+            path = os.path.join(
+                self.dir, f"{self.game.name}_{self.game.version}", "sprites", f"encoding_{i}.png")
+            if os.path.exists(path):
+                sprite = Image.open(path).convert("RGBA")
+                sprite = sprite.resize(
+                    (self.tile_size, self.tile_size)
+                )
+            else:
+                sprite = Image.new("RGBA", (self.tile_size, self.tile_size))
+            ret[c] = sprite
+        return ret
+
+    def draw_level(self, level_str):
+        lvl_rows = level_str.split()
+        w = len(lvl_rows[0])
+        h = len(lvl_rows)
+        ts = self.tile_size
+        p = self.pad
+        lvl_img = Image.new(
+            "RGB", (w * ts + 2 * p, h * ts + 2 * p), (255, 255, 255))
+        for y, r in enumerate(lvl_rows):
+            for x, c in enumerate(r):
+                img = self.char_to_img[c]
+                lvl_img.paste(
+                    img, (p + x * ts, p + y * ts, p +
+                          (x + 1) * ts, p + (y + 1) * ts)
+                )
+        return lvl_img
+
+
+class GVGAILevelVisualizer:
     def __init__(self, env: Env, tile_size=16, padding=2):
         self.game = env
         self.tile_size = tile_size

@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-from gan.level_visualizer import LevelVisualizer
+from gan.level_visualizer import GVGAILevelVisualizer
 from play_rl.env import Env
 from play_rl.wrappers import GridGame
 from collections import deque
@@ -126,7 +126,7 @@ def play_astar(level_str: str, env: GridGame, visualize: bool = False, env_def: 
     obs, _, _, info = env.step(0)
     frames = None
     if visualize:
-        level_visualizer = LevelVisualizer(env_def)
+        level_visualizer = GVGAILevelVisualizer(env_def)
         frames = []
 
     while not done:

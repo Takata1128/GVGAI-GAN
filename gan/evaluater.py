@@ -6,7 +6,7 @@ from typing import List
 from torchinfo import summary
 from utils import (
     tensor_to_level_str,
-    check_playable,
+    check_playable_zelda,
     check_level_similarity,
     check_object_similarity,
     check_shape_similarity,
@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
 from tqdm import tqdm
-from level_visualizer import LevelVisualizer
+from level_visualizer import GVGAILevelVisualizer
 import os
 import torch
 import numpy as np
@@ -50,7 +50,7 @@ class Evaluater:
             print("device : cpu")
 
         # Level Visualizer
-        self.level_visualizer = LevelVisualizer(config.env_name)
+        self.level_visualizer = GVGAILevelVisualizer(config.env_name)
 
         # Network
         latent_shape = (config.latent_size,)
@@ -133,7 +133,7 @@ class Evaluater:
         level_strs = tensor_to_level_str(self.config.env_name, output_levels)
         playable_count = 0
         for level_str in level_strs:
-            if check_playable(level_str):
+            if check_playable_zelda(level_str):
                 playable_count += 1
 
         playable_ratio = playable_count / self.config.eval_playable_counts

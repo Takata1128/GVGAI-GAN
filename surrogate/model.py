@@ -148,18 +148,18 @@ class SurrogateModel(nn.Module):
             self.self_attn1 = Self_Attn(filters)
 
         self.block1 = DisBlock(
-            filters+int(self.use_conditional), filters*2, use_bn=use_bn)
+            filters, filters * 2, use_bn=use_bn)
 
         if self.use_self_attention:
-            self.self_attn2 = Self_Attn(filters*2)
+            self.self_attn2 = Self_Attn(filters * 2)
 
-        self.block2 = DisBlock(filters*2, filters*4, use_bn=use_bn)
+        self.block2 = DisBlock(filters * 2, filters * 4, use_bn=use_bn)
 
         if self.use_recon_loss:
-            self.decoder = Decoder(filters*4, self.input_ch)
+            self.decoder = Decoder(filters * 4, self.input_ch)
 
         self.postprocess = nn.Conv2d(
-            filters*4, 1, shapes[-1], 1, 0, bias=False)
+            filters * 4, 1, shapes[-1], 1, 0, bias=False)
 
     def forward(self, x, label=None):
         x = self.preprocess(x)
@@ -182,10 +182,7 @@ class SurrogateModel(nn.Module):
 
         recon = None
         if self.use_recon_loss:
-            if self.use_conditional:
-                recon = self.decoder(branch_x, label)
-            else:
-                recon = self.decoder(branch_x)
+            recon = self.decoder(branch_x)
             return out, recon
         return out
 
@@ -200,10 +197,10 @@ class SurrogateModel(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, in_channel, out_channel):
         super().__init__()
-        self.block1 = GenBlock(in_channel, in_channel//2, use_bn=True)
-        self.block2 = GenBlock(in_channel//2, in_channel//4, use_bn=True)
-        self.attn = Self_Attn(in_channel//4)
-        self.conv = nn.Conv2d(in_channel//4, out_channel,
+        self.block1 = GenBlock(in_channel, in_channel // 2, use_bn=True)
+        self.block2 = GenBlock(in_channel // 2, in_channel // 4, use_bn=True)
+        self.attn = Self_Attn(in_channel // 4)
+        self.conv = nn.Conv2d(in_channel // 4, out_channel,
                               kernel_size=1, stride=1, bias=True)
         self.softmax = nn.Softmax2d()
 

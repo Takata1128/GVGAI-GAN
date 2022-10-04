@@ -5,16 +5,16 @@ from torchvision import transforms
 import torch
 import numpy as np
 from gan.env import Env
+from gan.utils import check_playable_zelda
 
 
-class LevelDataset(Dataset):
+class SurrogateModelDataset(Dataset):
     def __init__(
         self,
         root,
         env: Env,
         datamode="train",
         transform=transforms.ToTensor(),
-        latent_size=100,
     ):
         self.env = env
         self.image_dir = os.path.join(root, env.name, datamode)
@@ -24,35 +24,32 @@ class LevelDataset(Dataset):
         self.data_length = len(self.image_paths)
 
         self.transform = transform
-        self.latent_size = latent_size
 
     def __len__(self):
         return self.data_length
 
     def __getitem__(self, index):
-        latent = torch.randn(size=(self.latent_size,))
         img_path = self.image_paths[index]
-        img, label = self._open(img_path)
+        img, y = self._open(img_path)
 
         if not self.transform is None:
             img = self.transform(img)
 
-        return latent, img, label
+        return img, y
 
     def _open(self, img_path):
         with open(img_path, "r") as f:
-            datalist = f.readlines()
+            level_str = f.read()
+            level_str_list = f.readlines()
         ret = np.zeros(
             (len(self.env.ascii),
              self.env.state_shape[1], self.env.state_shape[2]),
         )
-
-        # label : onehot vector of counts of map tile object.
-        label = np.zeros(len(self.env.ascii))
-        for i, s in enumerate(datalist):
+        for i, s in enumerate(level_str_list):
             for j, c in enumerate(s):
                 if c == "\n":
                     break
                 ret[self.env.ascii.index(c), i, j] = 1
-                label[self.env.ascii.index(c)] += 1
-        return ret, label
+
+        y = 1 if check_playable_zelda(level_str) else 0
+        return ret, y
