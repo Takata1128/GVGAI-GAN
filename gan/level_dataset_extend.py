@@ -2,7 +2,7 @@ import os
 import shutil
 
 from .env import Env
-from .level_visualizer import GVGAILevelVisualizer
+from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 import numpy as np
 import torch
 import sys
@@ -101,7 +101,12 @@ make_another['roguelike'] = make_another_roguelike
 def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_name="zelda", version='v1'):
     np.random.seed(seed)
     env_def = Env(game_name, version)
-    visualizer = GVGAILevelVisualizer(env_def)
+
+    if env_def.name == 'mario':
+        visualizer = MarioLevelVisualizer(env_def, os.path.dirname(
+            __file__) + f"/ data/level/{game_name}_{version}/")
+    else:
+        visualizer = GVGAILevelVisualizer(env_def)
 
     train_dir_path = os.path.dirname(
         __file__) + f"/data/level/{game_name}_{version}/train/"
@@ -111,8 +116,6 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
         shutil.rmtree(train_dir_path)
     os.makedirs(train_dir_path)
 
-    # lvl_strs = visualizer.game.get_original_levels(
-    #     '/root/mnt/GVGAI-GAN/gan/data/level/zelda/originals')
     lvl_strs = visualizer.game.get_original_levels(
         f'/root/mnt/pcg/GVGAI-GAN/gan/data/level/{game_name}_{version}/originals')
 

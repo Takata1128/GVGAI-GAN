@@ -77,6 +77,10 @@ class TrainingConfig:
         self.input_shape = env.state_shape
         self.model_shapes = env.model_shape
         if self.env_name == 'mario':
+            self.env_version = 'v0'
+            self.checkpoints_path = (
+                os.path.dirname(__file__) + "/checkpoints_mario"
+            )  # save model path
             self.generator_filters = 64
             self.discriminator_filters = 64
         else:
@@ -120,9 +124,6 @@ class DataExtendConfig(TrainingConfig):
 
     eval_playable_counts: int = 100  # number of z to check playable.
 
-    reset_weight_interval: int = 1000000 * train_batch_size
-    reset_weight_threshold: float = 0.05
-
     save_image_interval: int = 200 * \
         train_batch_size  # save images interval
     save_model_interval: int = 1000000  # save models interval
@@ -135,7 +136,9 @@ class DataExtendConfig(TrainingConfig):
     bootstrap_max_count: int = 1
     add_generated_max_count: int = 1
     reset_weight_bootstrap_count: int = 3
-    stop_generate_count = 150
+    reset_weight_interval: int = 3000 * train_batch_size
+    reset_train_dataset_th: int = 30
+    stop_generate_count = 200
 
 
 @dataclass

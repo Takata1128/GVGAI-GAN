@@ -13,6 +13,7 @@ from . import loss
 from .env import Env
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 from .dataset import LevelDataset
+from .level_dataset_extend import prepare_dataset
 from .config import DataExtendConfig, TrainingConfig
 from .utils import (
     tensor_to_level_str,
@@ -21,7 +22,6 @@ from .utils import (
     check_object_similarity,
     check_shape_similarity,
 )
-from gan import dataset
 
 
 class Trainer:
@@ -58,7 +58,7 @@ class Trainer:
         print("Training Dataset :", train_dataset.image_dir)
         # DataLoader
         self.train_loader = DataLoader(
-            train_dataset, batch_size=config.train_batch_size, shuffle=True
+            train_dataset, batch_size=config.train_batch_size, shuffle=True, drop_last=True
         )
 
         # Level Visualizer
@@ -97,6 +97,7 @@ class Trainer:
         self.max_playable_count = 0
         self.last_reset_steps = 0
         self.bootstrap_count = 0
+        self.training_set_reset_count = 0
 
     def _build_model(self):
         latent_shape = (self.config.latent_size,)
@@ -210,8 +211,8 @@ class Trainer:
                         real.to(self.device).float(),
                         label.to(self.device).int(),
                     )
-
                     fake_logit = self.generator(latent, label)
+
                     Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
                         real, fake_logit, label
                     )
@@ -277,17 +278,40 @@ class Trainer:
                             unique_playable_levels = self._bootstrap(
                                 unique_playable_levels)
 
-                        if isinstance(self.config, DataExtendConfig) and self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
-                            print("reset weights of model.")
-                            self._save_images()
-                            if self.config.use_recon_loss:
-                                self._save_recon_images(real, label)
-                            self._build_model()
-                            self.last_reset_steps = self.step
-                            self.bootstrap_count = 0
-
-                    # 一定数生成したらストップ
                         if isinstance(self.config, DataExtendConfig):
+                            # 一定数生成したらGANの重みリセット
+                            if self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
+                                print("reset weights of model.")
+                                self._save_images()
+                                if self.config.use_recon_loss:
+                                    self._save_recon_images(real, label)
+                                self._build_model()
+                                self.last_reset_steps = self.step
+                                self.bootstrap_count = 0
+                            # 一定数生成したら学習データリセット
+                            if self.data_index > self.config.reset_train_dataset_th*(self.training_set_reset_count+1):
+                                print(
+                                    f"Generated size exceeds {self.data_index}, so reset training dataset.")
+                                self.training_set_reset_count += 1
+                                prepare_dataset(
+                                    seed=self.config.seed, extend_data=self.config.clone_data, flip=self.config.flip_data, dataset_size=self.config.dataset_size, game_name=self.config.env_name, version=self.config.env_version
+                                )
+                                # Dataset
+                                del self.train_loader
+                                train_dataset = LevelDataset(
+                                    self.config.level_data_path,
+                                    self.env,
+                                    datamode=self.config.dataset_type,
+                                    transform=None,
+                                    latent_size=self.config.latent_size,
+                                )
+                                self.dataset_files = os.listdir(
+                                    train_dataset.image_dir)
+                                self.train_loader = DataLoader(
+                                    train_dataset, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
+                                )
+
+                            # 全体である程度生成したらデータ拡張ストップ
                             if self.data_index >= self.config.stop_generate_count:
                                 print(
                                     f"Generated size exceeds {self.data_index}, so stop generation.")
