@@ -14,15 +14,26 @@ def tensor_to_level_str(name, tensor):
     return lvl_strs
 
 
-HEIGHT = {'v0': 9, 'v1': 12}
-WIDTH = {'v0': 13, 'v1': 16}
+HEIGHT = {'zelda_v0': 9, 'zelda_v1': 12, 'mario': 14}
+WIDTH = {'zelda_v0': 13, 'zelda_v1': 16, 'mario': 28}
 
 
-def check_playable(lvl_str: str, env_name: str):
-    if env_name == 'mario':
+def check_playable(lvl_str: str, env_fullname: str):
+    if env_fullname == 'mario':
         return check_playable_mario(lvl_str)
-    elif env_name == 'zelda':
-        return check_playable_zelda(lvl_str)
+    elif env_fullname == 'zelda_v0':
+        return check_playable_zelda(lvl_str, env_fullname)
+    elif env_fullname == 'zelda_v1':
+        return check_playable_zelda(lvl_str, env_fullname)
+    else:
+        raise NotImplementedError(f"Env {env_fullname} is not implemented!")
+
+
+def check_level_similarity(lvl_str1: str, lvl_str2: str, env_name: str):
+    if env_name == 'mario':
+        return check_level_similarity_mario(lvl_str1, lvl_str2)
+    elif env_name == 'zelda_v0' or env_name == 'zelda_v1':
+        return check_level_similarity_zelda(lvl_str1, lvl_str2, env_name[-2:])
     else:
         raise NotImplementedError(f"Env {env_name} is not implemented!")
 
@@ -83,7 +94,22 @@ def check_playable_zelda(lvl_str: str, version: str = 'v1'):
     return dist[gx][gy] != -1 and dist[kx][ky] != -1
 
 
-def check_level_similarity(level1: list[str], level2: list[str], version: str):
+def check_level_similarity_mario(level1, level2):
+    n = 0
+    hit = 0
+    for i in range(HEIGHT['mario'], HEIGHT['mario'] * 2):
+        for j in range(WIDTH['mario']):
+            c1 = level1[i][j]
+            c2 = level2[i][j]
+            if c1 == "\n":
+                continue
+            if c1 == c2:
+                hit += 1
+            n += 1
+    return hit / n
+
+
+def check_level_similarity_zelda(level1: list[str], level2: list[str], version: str):
     n = 0
     hit = 0
     for i in range(HEIGHT[version]):
@@ -136,8 +162,8 @@ def make_zelda_level(wall_p=0.20, height=12, width=16):
 
     for c in requirements:
         while True:
-            rx = np.random.randint(1, width-1)
-            ry = np.random.randint(1, height-1)
+            rx = np.random.randint(1, width - 1)
+            ry = np.random.randint(1, height - 1)
             pos = (rx, ry)
             if pos not in requirements_positions:
                 requirements_positions.append(pos)
@@ -146,7 +172,7 @@ def make_zelda_level(wall_p=0.20, height=12, width=16):
     level_rows = [["." for i in range(width)] for j in range(height)]
     for i in range(height):
         for j in range(width):
-            if (i == 0 or i == height-1 or j == 0 or j == width-1):
+            if (i == 0 or i == height - 1 or j == 0 or j == width - 1):
                 level_rows[i][j] = 'w'
 
             if np.random.rand() < wall_p:

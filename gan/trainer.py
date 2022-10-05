@@ -4,7 +4,6 @@ from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 import os
 import torch
-import operator
 import numpy as np
 import random
 
@@ -14,18 +13,20 @@ from .env import Env
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 from .dataset import LevelDataset
 from .level_dataset_extend import prepare_dataset
-from .config import DataExtendConfig, TrainingConfig
+from .config import DataExtendConfig, BaseConfig
 from .utils import (
+    check_level_similarity,
+    check_playable,
     tensor_to_level_str,
     check_playable_zelda,
-    check_level_similarity,
+    check_level_similarity_zelda,
     check_object_similarity,
     check_shape_similarity,
 )
 
 
 class Trainer:
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config: BaseConfig):
         self.config = config
         self.env = Env(self.config.env_name, self.config.env_version)
 
@@ -75,22 +76,22 @@ class Trainer:
         self.playability = 0
         self.data_index = 0
         self.steps_per_epoch = len(self.train_loader)
-        self.model_save_epoch = self.config.save_model_interval//(
-            self.config.train_batch_size*self.steps_per_epoch)
-        self.image_save_epoch = self.config.save_image_interval//(
-            self.config.train_batch_size*self.steps_per_epoch)
-        self.eval_epoch = self.config.eval_playable_interval//(
-            self.config.train_batch_size*self.steps_per_epoch)
-        self.bootstrap_epoch = self.config.bootstrap_interval//(
-            self.config.train_batch_size*self.steps_per_epoch)
+        self.model_save_epoch = self.config.save_model_interval // (
+            self.config.train_batch_size * self.steps_per_epoch)
+        self.image_save_epoch = self.config.save_image_interval // (
+            self.config.train_batch_size * self.steps_per_epoch)
+        self.eval_epoch = self.config.eval_playable_interval // (
+            self.config.train_batch_size * self.steps_per_epoch)
+        self.bootstrap_epoch = self.config.bootstrap_interval // (
+            self.config.train_batch_size * self.steps_per_epoch)
         print(f"model_save_epoch:{self.model_save_epoch}")
         print(f"image_save_epoch:{self.image_save_epoch}")
         print(f"eval_epoch:{self.eval_epoch}")
         print(f"bootstrap_epoch:{self.bootstrap_epoch}")
 
         if isinstance(self.config, DataExtendConfig):
-            self.reset_epoch = self.config.reset_weight_interval//(
-                self.config.train_batch_size*self.steps_per_epoch)
+            self.reset_epoch = self.config.reset_weight_interval // (
+                self.config.train_batch_size * self.steps_per_epoch)
             print(f"model_reset_epoch:{self.reset_epoch}")
 
         self.step = 0
@@ -254,7 +255,7 @@ class Trainer:
                         levels = self._generate_levels(latents, labels)
                         playable_levels = []
                         for level_str in levels:
-                            if check_playable_zelda(level_str, self.config.env_version):
+                            if check_playable(level_str, self.config.env_name):
                                 playable_levels.append(level_str)
                         wandb.log(
                             {
@@ -289,7 +290,7 @@ class Trainer:
                                 self.last_reset_steps = self.step
                                 self.bootstrap_count = 0
                             # 一定数生成したら学習データリセット
-                            if self.data_index > self.config.reset_train_dataset_th*(self.training_set_reset_count+1):
+                            if self.data_index > self.config.reset_train_dataset_th * (self.training_set_reset_count + 1):
                                 print(
                                     f"Generated size exceeds {self.data_index}, so reset training dataset.")
                                 self.training_set_reset_count += 1
@@ -318,7 +319,7 @@ class Trainer:
                                 break
 
                     # 一定期間たったら強制リセット
-                    if isinstance(self.config, DataExtendConfig) and self.step-self.last_reset_steps >= 3000:
+                    if isinstance(self.config, DataExtendConfig) and self.step - self.last_reset_steps >= 3000:
                         print(
                             f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
                         self._build_model()
@@ -393,15 +394,10 @@ class Trainer:
             level_strs[i] = level_strs[i].split()
         (
             level_similarity,
-            object_similarity,
-            shape_similarity,
             duplicate_ratio,
-        ) = self._calc_level_similarity(level_strs, self.config.env_version)
+        ) = self._calc_level_similarity(level_strs)
 
         wandb.log({"Level Similarity Ratio": level_similarity})
-        wandb.log(
-            {"Special Object Similarity Ratio": object_similarity})
-        wandb.log({"Shape Similarity Ratio": shape_similarity})
         wandb.log({"Duplicate Ratio": duplicate_ratio})
 
         if len(playable_levels) > self.max_playable_count:
@@ -433,7 +429,7 @@ class Trainer:
                     dup = False
                     for ds_level in dataset_levels:
                         sim = check_level_similarity(
-                            generated_level.split(), ds_level.split(), self.config.env_version)
+                            generated_level.split(), ds_level.split(), self.config.env_name)
                         if sim >= self.config.bootstrap_filter:
                             dup = True
                             break
@@ -518,7 +514,7 @@ class Trainer:
         recon_loss_item = None
         if self.config.use_recon_loss:
             recon_loss = loss.recon_loss(real_recon, real_images_logit)
-            discriminator_loss += self.config.recon_lambda*recon_loss
+            discriminator_loss += self.config.recon_lambda * recon_loss
             recon_loss_item = recon_loss.item()
         discriminator_loss.backward()
         self.optimizer_d.step()
@@ -561,35 +557,24 @@ class Trainer:
             os.path.join(model_save_path, f"models_{epoch}.tar"),
         )
 
-    def _calc_level_similarity(self, level_strs, version):
+    def _calc_level_similarity(self, level_strs):
         res_level, res_object, res_shape, res_duplicate = 0, 0, 0, 0
         n_level = 0
         n_object_level = 0
         n_shape_level = 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
-                res_level += check_level_similarity(
-                    level_strs[i], level_strs[j], version)
-                obj_tmp = check_object_similarity(
-                    level_strs[i], level_strs[j], version)
-                if obj_tmp is not None:
-                    res_object += obj_tmp
-                    n_object_level += 1
-                shape_tmp = check_shape_similarity(
-                    level_strs[i], level_strs[j], version)
-                if shape_tmp is not None:
-                    res_shape += shape_tmp
-                    n_shape_level += 1
+                sim = check_level_similarity(
+                    level_strs[i], level_strs[j], self.config.env_name)
+                res_level += sim
                 res_duplicate += (
                     1
-                    if check_level_similarity(level_strs[i], level_strs[j], version) >= 0.90
+                    if sim >= 0.90
                     else 0
                 )
                 n_level += 1
         return (
             res_level / n_level,
-            res_object / n_object_level if n_object_level > 0 else None,
-            res_shape / n_shape_level if n_shape_level > 0 else None,
             res_duplicate / n_level,
         )
 
