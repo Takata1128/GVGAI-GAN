@@ -11,7 +11,6 @@ class BaseConfig:
     # environment name
     env_name: str = "zelda"
     env_version: str = 'v1'
-    env_fullname: str = f'{env_name}_{env_version}'
     # data path
     level_data_path: str = (
         os.path.dirname(__file__) + "/data/level"
@@ -76,6 +75,7 @@ class BaseConfig:
 
     def set_env(self):
         env = Env(self.env_name, self.env_version)
+        self.env_fullname: str = f'{self.env_name}_{self.env_version}'
         self.input_shape = env.state_shape
         self.model_shapes = env.model_shape
         if self.env_name == 'mario':
@@ -119,7 +119,7 @@ class DataExtendConfig(BaseConfig):
     bootstrap_max_count: int = 1
     add_generated_max_count: int = 1
     reset_weight_bootstrap_count: int = 3
-    reset_weight_interval: int = 3000 * train_batch_size
+    reset_weight_interval: int = 2500 * train_batch_size
     reset_train_dataset_th: int = 30
     stop_generate_count = 200
 
@@ -155,13 +155,13 @@ class SmallModelConfig(BaseConfig):
     bootstrap_max_count: int = 1
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 20000 * (train_batch_size // 32)  # training steps
+    steps: int = 10000 * (train_batch_size // 32)  # training steps
+    dataset_size: int = 35
 
-    save_image_interval: int = 200 * train_batch_size  # save images interval
+    save_image_interval: int = 100 * train_batch_size  # save images interval
     save_model_interval: int = 1000 * train_batch_size  # save models interval
-    eval_playable_interval: int = 200 * train_batch_size  # check playable interval
-    bootstrap_interval: int = 40 * train_batch_size  # bootstrap
-    dataset_size: int = 50
+    eval_playable_interval: int = 100 * train_batch_size  # check playable interval
+    bootstrap_interval: int = 10 * train_batch_size  # bootstrap
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0

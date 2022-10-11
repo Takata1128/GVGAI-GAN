@@ -29,9 +29,11 @@ def g_loss(fake_logits: torch.Tensor):
     return generator_loss
 
 
-def div_loss(fake: torch.Tensor, loss_type: str, lambda_div=1.0):
+def div_loss(latent: torch.Tensor, fake: torch.Tensor, loss_type: str, lambda_div=1.0):
     if loss_type == "l1":
         return -torch.abs(fake[1:] - fake[:-1]).mean() * lambda_div
+    elif loss_type == 'l1-latent':
+        return -torch.abs(fake[1:] - fake[:-1]).mean() / torch.abs(latent[1:] - latent[:-1]).mean() * lambda_div
     elif loss_type == "l2":
         return -((fake[1:] - fake[:-1]) ** 2).mean() * lambda_div
     else:

@@ -29,13 +29,13 @@ def check_playable(lvl_str: str, env_fullname: str):
         raise NotImplementedError(f"Env {env_fullname} is not implemented!")
 
 
-def check_level_similarity(lvl_str1: str, lvl_str2: str, env_name: str):
-    if env_name == 'mario':
+def check_level_similarity(lvl_str1: str, lvl_str2: str, env_fullname: str):
+    if env_fullname == 'mario':
         return check_level_similarity_mario(lvl_str1, lvl_str2)
-    elif env_name == 'zelda_v0' or env_name == 'zelda_v1':
-        return check_level_similarity_zelda(lvl_str1, lvl_str2, env_name[-2:])
+    elif env_fullname == 'zelda_v0' or env_fullname == 'zelda_v1':
+        return check_level_similarity_zelda(lvl_str1, lvl_str2, env_fullname)
     else:
-        raise NotImplementedError(f"Env {env_name} is not implemented!")
+        raise NotImplementedError(f"Env {env_fullname} is not implemented!")
 
 
 def check_playable_mario(lvl_str: str):
@@ -109,11 +109,11 @@ def check_level_similarity_mario(level1, level2):
     return hit / n
 
 
-def check_level_similarity_zelda(level1: list[str], level2: list[str], version: str):
+def check_level_similarity_zelda(level1: list[str], level2: list[str], env_fullname: str):
     n = 0
     hit = 0
-    for i in range(HEIGHT[version]):
-        for j in range(WIDTH[version]):
+    for i in range(HEIGHT[env_fullname]):
+        for j in range(WIDTH[env_fullname]):
             c1 = level1[i][j]
             c2 = level2[i][j]
             if c1 == "\n":

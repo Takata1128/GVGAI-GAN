@@ -91,7 +91,7 @@ class Self_Attn(nn.Module):
         self.gamma = nn.Parameter(torch.zeros(1))
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, x):
+    def forward(self, x, label=None):
         """
         inputs :
             x : input feature map (B,C,W,H)
@@ -116,18 +116,21 @@ class Self_Attn(nn.Module):
 
 
 class ConditionalSelfAttention(nn.Module):
-    def __init__(self, in_dim, shape):
+    def __init__(self, in_dim, input_shape, label_channels):
         super().__init__()
-        self.shape = shape
-        self.attn = Self_Attn(in_dim)
         self.in_dim = in_dim
-        num_embeddings = mul(*self.shape)
-        self.embedding = nn.Embedding(num_embeddings, num_embeddings)
+        self.shape = input_shape
+        self.channels = label_channels
+        self.attn = Self_Attn(in_dim)
+        self.embedding = nn.Linear(label_channels, label_channels)
+        self.resize = nn.Upsample(input_shape)
 
-    def forward(self, x, label=None):
+    def forward(self, x, label):
         x = self.attn(x)
+        label = label.float()
         u = self.embedding(label)
-        u = u.view(-1, label.shape[1], *self.shape)
+        u = u.view(-1, self.channels, 1, 1)
+        u = self.resize(u)
         x = torch.cat([x, u], dim=1)
         return x
 
@@ -187,7 +190,7 @@ class DisBlock(nn.Module):
 class Generator(nn.Module):
     def __init__(
         self,
-        out_dim: int,
+        out_ch: int,
         shapes: list[tuple[int]],
         z_shape,
         filters=64,
@@ -204,43 +207,60 @@ class Generator(nn.Module):
         self.use_self_attention = use_self_attention
         self.use_conditional = use_conditional
         self.use_deconv_g = use_deconv_g
-        self.out_dim = out_dim
+        self.out_dim = out_ch
 
         if not use_linear4z2features_g:
             self.preprocess = nn.Sequential(
-                nn.ConvTranspose2d(self.z_size, filters*4,
+                nn.ConvTranspose2d(self.z_size, filters * 4,
                                    self.init_shape, 1, 0, bias=False),
-                nn.BatchNorm2d(filters*4),
+                nn.BatchNorm2d(filters * 4),
                 nn.ReLU(True)
             )
         else:
             self.preprocess = nn.Sequential(
-                nn.Linear(self.z_size, mul(filters*4, mul(*self.init_shape))),
+                nn.Linear(self.z_size, mul(
+                    filters * 4, mul(*self.init_shape))),
                 nn.ReLU(),
             )
 
+        layer_input_channels = filters * 4
+
         if 0 in self.use_self_attention:
-            self.self_attn0 = Self_Attn(filters*4)
+            if self.use_conditional:
+                self.self_attn0 = ConditionalSelfAttention(
+                    layer_input_channels, shapes[0], out_ch)
+                layer_input_channels += out_ch  # out_dim == kinds of tile.
+            else:
+                self.self_attn0 = Self_Attn(layer_input_channels)
 
         self.block1 = GenBlock(
-            filters*4, filters*2, use_deconv_g
+            layer_input_channels, filters * 2, use_deconv_g
         )
+        layer_input_channels = filters * 2
 
         if 1 in self.use_self_attention:
-            self.self_attn1 = Self_Attn(filters*2)
+            if self.use_conditional:
+                self.self_attn1 = ConditionalSelfAttention(
+                    layer_input_channels, shapes[1], out_ch)
+                layer_input_channels += out_ch  # out_dim == kinds of tile.
+            else:
+                self.self_attn1 = Self_Attn(layer_input_channels)
 
         self.block2 = GenBlock(
-            filters*2, filters, use_deconv_g
+            layer_input_channels, filters, use_deconv_g
         )
-        if self.use_conditional:
-            self.self_attn2 = ConditionalSelfAttention(
-                filters, shapes[-1])
-        elif 2 in self.use_self_attention:
-            self.self_attn2 = Self_Attn(filters)
+        layer_input_channels = filters
 
-        outconv_ch = filters + (0 if not self.use_conditional else out_dim)
-        self.outconv = nn.Sequential(nn.Conv2d(outconv_ch, out_dim,
-                                               kernel_size=1, stride=1), nn.ReLU())
+        if 2 in self.use_self_attention:
+            if self.use_conditional:
+                self.self_attn2 = ConditionalSelfAttention(
+                    filters, shapes[2], out_ch)
+                layer_input_channels += out_ch  # out_dim == kinds of tile.
+
+            else:
+                self.self_attn2 = Self_Attn(filters)
+        self.outconv = nn.Sequential(nn.Conv2d(layer_input_channels, out_ch,
+                                               kernel_size=1, stride=1))
 
     def forward(self, z, label=None):
         if not self.use_linear4z2features_g:
@@ -248,20 +268,19 @@ class Generator(nn.Module):
             x = self.preprocess(x)
         else:
             x = self.preprocess(z)
-            x = x.view(-1, self.filters*4, *self.init_shape)
+            x = x.view(-1, self.filters * 4, *self.init_shape)
 
         if 0 in self.use_self_attention:
-            x = self.self_attn0(x)
+            x = self.self_attn0(x, label)
         x = self.block1(x)
 
         if 1 in self.use_self_attention:
-            x = self.self_attn1(x)
+            x = self.self_attn1(x, label)
 
         x = self.block2(x)
-        if self.use_conditional:
+
+        if 2 in self.use_self_attention:
             x = self.self_attn2(x, label)
-        elif 2 in self.use_self_attention:
-            x = self.self_attn2(x)
         x = self.outconv(x)
         return x
 
@@ -309,29 +328,43 @@ class Discriminator(nn.Module):
                 nn.LeakyReLU(0.2, True),
             )
 
-        if self.use_conditional:
-            self.self_attn1 = ConditionalSelfAttention(
-                filters, self.input_shape)
-        elif 0 in self.use_self_attention:
-            self.self_attn1 = Self_Attn(filters)
+        layer_input_channels = filters
 
-        block1_ch = filters + \
-            (0 if not self.use_conditional else self.input_ch)
+        if 0 in self.use_self_attention:
+            if self.use_conditional:
+                self.self_attn1 = ConditionalSelfAttention(
+                    layer_input_channels, shapes[0], in_ch)
+                layer_input_channels += in_ch  # out_dim == kinds of tile.
+            else:
+                self.self_attn1 = Self_Attn(layer_input_channels)
 
         self.block1 = DisBlock(
-            block1_ch, filters*2, use_bn=use_bn, use_sn=self.use_sn)
+            layer_input_channels, filters * 2, use_bn=use_bn, use_sn=self.use_sn)
+        layer_input_channels = filters * 2
 
         if 1 in self.use_self_attention:
-            self.self_attn2 = Self_Attn(filters*2)
+            if self.use_conditional:
+                self.self_attn2 = ConditionalSelfAttention(
+                    layer_input_channels, shapes[1], in_ch)
+                layer_input_channels += in_ch  # out_dim == kinds of tile.
+            else:
+                self.self_attn2 = Self_Attn(layer_input_channels)
 
-        self.block2 = DisBlock(filters*2, filters*4,
+        self.block2 = DisBlock(layer_input_channels, filters * 4,
                                use_bn=use_bn, use_sn=self.use_sn)
+        layer_input_channels = filters * 4
 
         if 2 in self.use_self_attention:
-            self.self_attn3 = Self_Attn(filters*4)
+            if self.use_conditional:
+                self.self_attn3 = ConditionalSelfAttention(
+                    layer_input_channels, shapes[2], in_ch)
+                layer_input_channels += in_ch  # out_dim == kinds of tile.
+            else:
+                self.self_attn3 = Self_Attn(layer_input_channels)
 
         if self.use_recon_loss:
-            self.decoder = Decoder(filters*4, self.input_ch)
+            self.decoder = Decoder(
+                layer_input_channels, self.input_ch, filters, self.use_self_attention != [], self.use_conditional, shapes)
 
         if self.use_minibatch_std:
             self.minibatch_std = MiniBatchStd()
@@ -341,28 +374,26 @@ class Discriminator(nn.Module):
         else:
             if self.use_sn:
                 self.postprocess = spectral_norm(
-                    nn.Conv2d(filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0))
+                    nn.Conv2d(layer_input_channels + int(self.use_minibatch_std), 1, shapes[-1], 1, 0))
             else:
                 self.postprocess = nn.Conv2d(
-                    filters*4 + int(self.use_minibatch_std), 1, shapes[-1], 1, 0)
+                    layer_input_channels + int(self.use_minibatch_std), 1, shapes[-1], 1, 0)
 
     def forward(self, x, label=None):
         x = self.preprocess(x)
 
-        if self.use_conditional:
+        if 0 in self.use_self_attention:
             x = self.self_attn1(x, label)
-        elif 0 in self.use_self_attention:
-            x = self.self_attn1(x)
 
         x = self.block1(x)
 
         if 1 in self.use_self_attention:
-            x = self.self_attn2(x)
+            x = self.self_attn2(x, label)
 
         x = self.block2(x)
 
         if 2 in self.use_self_attention:
-            x = self.self_attn3(x)
+            x = self.self_attn3(x, label)
 
         branch_x = x
 
@@ -392,18 +423,42 @@ class Discriminator(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, in_channel, out_channel):
+    def __init__(self, in_channel, out_channel, filters, use_self_attention=True, use_conditional=False, model_shapes=None):
         super().__init__()
-        self.block1 = GenBlock(in_channel, in_channel//2, use_bn=True)
-        self.block2 = GenBlock(in_channel//2, in_channel//4, use_bn=True)
-        self.attn = Self_Attn(in_channel//4)
-        self.conv = nn.Conv2d(in_channel//4, out_channel,
+        self.use_self_attention = use_self_attention
+        self.use_conditional = use_conditional
+        layer_input_channels = in_channel
+
+        self.block1 = GenBlock(in_channel, filters * 2, use_bn=True)
+        layer_input_channels = filters * 2
+
+        if self.use_self_attention:
+            if self.use_conditional:
+                self.attn1 = ConditionalSelfAttention(
+                    layer_input_channels, model_shapes[1], out_channel)
+                layer_input_channels += out_channel
+            else:
+                self.attn1 = Self_Attn(layer_input_channels)
+
+        self.block2 = GenBlock(layer_input_channels, filters, use_bn=True)
+        layer_input_channels = filters
+
+        if self.use_self_attention:
+            if self.use_conditional:
+                self.attn2 = ConditionalSelfAttention(
+                    layer_input_channels, model_shapes[0], out_channel)
+                layer_input_channels += out_channel
+            else:
+                self.attn2 = Self_Attn(layer_input_channels)
+
+        self.conv = nn.Conv2d(layer_input_channels, out_channel,
                               kernel_size=1, stride=1, bias=True)
         self.softmax = nn.Softmax2d()
 
     def forward(self, x, label=None):
         x = self.block1(x)
+        x = self.attn1(x, label)
         x = self.block2(x)
-        x = self.attn(x)
+        x = self.attn2(x, label)
         x = self.conv(x)
         return self.softmax(x)

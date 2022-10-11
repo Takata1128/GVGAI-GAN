@@ -37,7 +37,7 @@ def main(surrogate_config: SurrogateModelTrainingConfig, model_config: SmallMode
     env = Env(model_config.env_name, model_config.env_version)
 
     generator = Generator(
-        out_dim=model_config.input_shape[0],
+        out_ch=model_config.input_shape[0],
         shapes=model_config.model_shapes,
         z_shape=(model_config.latent_size,),
         filters=model_config.generator_filters,

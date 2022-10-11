@@ -6,7 +6,7 @@ import os
 import torch
 import numpy as np
 import random
-
+import shutil
 
 from . import loss
 from .env import Env
@@ -17,11 +17,7 @@ from .config import DataExtendConfig, BaseConfig
 from .utils import (
     check_level_similarity,
     check_playable,
-    tensor_to_level_str,
-    check_playable_zelda,
-    check_level_similarity_zelda,
-    check_object_similarity,
-    check_shape_similarity,
+    tensor_to_level_str
 )
 
 
@@ -61,6 +57,13 @@ class Trainer:
         self.train_loader = DataLoader(
             train_dataset, batch_size=config.train_batch_size, shuffle=True, drop_last=True
         )
+
+        if isinstance(self.config, DataExtendConfig):
+            generated_levels_path = os.path.join(self.config.level_data_path,
+                                                 f'{self.config.env_name}_{self.config.env_version}', "generated",)
+            if os.path.exists(generated_levels_path):
+                shutil.rmtree(generated_levels_path)
+            os.makedirs(generated_levels_path)
 
         # Level Visualizer
         if self.config.env_name == 'mario':
@@ -116,7 +119,7 @@ class Trainer:
         elif self.config.model_type == "small":
             from .models.small_models import Generator
             self.generator = Generator(
-                out_dim=self.config.input_shape[0],
+                out_ch=self.config.input_shape[0],
                 shapes=self.config.model_shapes,
                 z_shape=latent_shape,
                 filters=self.config.generator_filters,
@@ -203,7 +206,7 @@ class Trainer:
             )
             os.makedirs(model_save_path)
 
-            for epoch in range(1, self.config.epochs + 1):
+            for epoch in range(1, 1000000):
                 self.generator.train()
                 for latent, real, label in self.train_loader:
                     self.step += 1
@@ -218,7 +221,7 @@ class Trainer:
                         real, fake_logit, label
                     )
                     generator_loss, div_loss = self._generator_update(
-                        fake_logit, label)
+                        latent, fake_logit, label)
 
                     metrics["D(x)[Discriminator]"] = Dx
                     metrics["D(G(z))[Discriminator]"] = DGz_d
@@ -255,7 +258,7 @@ class Trainer:
                         levels = self._generate_levels(latents, labels)
                         playable_levels = []
                         for level_str in levels:
-                            if check_playable(level_str, self.config.env_name):
+                            if check_playable(level_str, self.config.env_fullname):
                                 playable_levels.append(level_str)
                         wandb.log(
                             {
@@ -324,6 +327,8 @@ class Trainer:
                             f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
                         self._build_model()
                         self.last_reset_steps = self.step
+
+            self._save_models(model_save_path, None, None)
 
     def _generate_levels(self, latents, labels):
         p_level = torch.softmax(
@@ -429,7 +434,7 @@ class Trainer:
                     dup = False
                     for ds_level in dataset_levels:
                         sim = check_level_similarity(
-                            generated_level.split(), ds_level.split(), self.config.env_name)
+                            generated_level.split(), ds_level.split(), self.config.env_fullname)
                         if sim >= self.config.bootstrap_filter:
                             dup = True
                             break
@@ -521,7 +526,7 @@ class Trainer:
 
         return D_x, D_G_z, discriminator_loss.item(), recon_loss_item
 
-    def _generator_update(self, fake_images_logit, label=None):
+    def _generator_update(self, latent: torch.Tensor, fake_images_logit: torch.Tensor, label: torch.Tensor = None):
         """
         update generator: maximize log(D(G(z)))
         """
@@ -538,7 +543,7 @@ class Trainer:
             generator_loss = loss.g_loss_hinge(fake_logits)
 
         div_loss = loss.div_loss(
-            torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
+            latent, torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
         if self.playability > self.config.div_loss_threshold_playability:
             generator_loss += div_loss
 
@@ -546,7 +551,9 @@ class Trainer:
         self.optimizer_g.step()
         return generator_loss.item(), div_loss.item()
 
-    def _save_models(self, model_save_path: str, epoch: int, playable_count: int):
+    def _save_models(self, model_save_dir: str, epoch: int, playable_count: int):
+        model_save_path = os.path.join(
+            model_save_dir, f"models_{epoch}.tar" if epoch is not None else "latest.tar")
         torch.save(
             {
                 "epoch": epoch,
@@ -554,7 +561,7 @@ class Trainer:
                 "generator": self.generator.state_dict(),
                 "discriminator": self.discriminator.state_dict(),
             },
-            os.path.join(model_save_path, f"models_{epoch}.tar"),
+            model_save_path
         )
 
     def _calc_level_similarity(self, level_strs):
@@ -565,7 +572,7 @@ class Trainer:
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
                 sim = check_level_similarity(
-                    level_strs[i], level_strs[j], self.config.env_name)
+                    level_strs[i], level_strs[j], self.config.env_fullname)
                 res_level += sim
                 res_duplicate += (
                     1
