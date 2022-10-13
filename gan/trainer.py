@@ -79,14 +79,18 @@ class Trainer:
         self.playability = 0
         self.data_index = 0
         self.steps_per_epoch = len(self.train_loader)
-        self.model_save_epoch = self.config.save_model_interval // (
-            self.config.train_batch_size * self.steps_per_epoch)
-        self.image_save_epoch = self.config.save_image_interval // (
-            self.config.train_batch_size * self.steps_per_epoch)
-        self.eval_epoch = self.config.eval_playable_interval // (
-            self.config.train_batch_size * self.steps_per_epoch)
-        self.bootstrap_epoch = self.config.bootstrap_interval // (
-            self.config.train_batch_size * self.steps_per_epoch)
+        # self.model_save_epoch = self.config.save_model_interval // (
+        #     self.config.train_batch_size * self.steps_per_epoch)
+        # self.image_save_epoch = self.config.save_image_interval // (
+        #     self.config.train_batch_size * self.steps_per_epoch)
+        # self.eval_epoch = self.config.eval_playable_interval // (
+        #     self.config.train_batch_size * self.steps_per_epoch)
+        # self.bootstrap_epoch = self.config.bootstrap_interval // (
+        #     self.config.train_batch_size * self.steps_per_epoch)
+        self.model_save_epoch = config.save_model_epoch
+        self.image_save_epoch = config.save_image_epoch
+        self.eval_epoch = config.eval_epoch
+        self.bootstrap_epoch = config.bootstrap_epoch
         print(f"model_save_epoch:{self.model_save_epoch}")
         print(f"image_save_epoch:{self.image_save_epoch}")
         print(f"eval_epoch:{self.eval_epoch}")

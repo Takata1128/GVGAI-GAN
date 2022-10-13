@@ -97,7 +97,7 @@ class DataExtendConfig(BaseConfig):
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
     div_loss: str = "l1"  # ["l1","l2","none"]
-    lambda_div: float = 10.0
+    lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 
     use_recon_loss: bool = True
@@ -109,19 +109,23 @@ class DataExtendConfig(BaseConfig):
     eval_playable_counts: int = 100  # number of z to check playable.
     save_image_interval: int = 200 * \
         train_batch_size  # save images interval
-    save_model_interval: int = 1000000  # save models interval
-    eval_playable_interval: int = 200 * train_batch_size  # check playable interval
-    bootstrap_interval: int = 20 * train_batch_size  # bootstrap
-    dataset_size: int = 100
+    # save_model_interval: int = 1000000  # save models interval
+    # eval_playable_interval: int = 200 * train_batch_size  # check playable interval
+    # bootstrap_interval: int = 20 * train_batch_size  # bootstrap
+    dataset_size: int = 300
+    save_image_epoch: int = 10
+    save_model_epoch: int = 100
+    eval_epoch: int = 10
+    bootstrap_epoch: int = 1
 
     bootstrap: str = "smart"  # ["none", "random", "smart"]
     bootstrap_filter = 0.90
-    bootstrap_max_count: int = 1
-    add_generated_max_count: int = 1
-    reset_weight_bootstrap_count: int = 3
+    bootstrap_max_count: int = 20
+    add_generated_max_count: int = 20
+    reset_weight_bootstrap_count: int = 200
     reset_weight_interval: int = 2500 * train_batch_size
-    reset_train_dataset_th: int = 30
-    stop_generate_count = 200
+    reset_train_dataset_th: int = 200
+    stop_generate_count = 2000
 
 
 @dataclass
@@ -152,16 +156,21 @@ class SmallModelConfig(BaseConfig):
 
     bootstrap: str = "smart"  # ["none", "random", "smart"]
     bootstrap_filter: float = 0.90
-    bootstrap_max_count: int = 1
+    bootstrap_max_count: int = 20
 
     train_batch_size: int = 32  # training batch size
     steps: int = 10000 * (train_batch_size // 32)  # training steps
-    dataset_size: int = 35
+    dataset_size: int = 300
 
-    save_image_interval: int = 100 * train_batch_size  # save images interval
-    save_model_interval: int = 1000 * train_batch_size  # save models interval
-    eval_playable_interval: int = 100 * train_batch_size  # check playable interval
-    bootstrap_interval: int = 10 * train_batch_size  # bootstrap
+    save_image_epoch: int = 1
+    save_model_epoch: int = 100
+    eval_epoch: int = 10
+    bootstrap_epoch: int = 1
+
+    # save_image_interval: int = 100 * train_batch_size  # save images interval
+    # save_model_interval: int = 1000 * train_batch_size  # save models interval
+    # eval_playable_interval: int = 100 * train_batch_size  # check playable interval
+    # bootstrap_interval: int = 10 * train_batch_size  # bootstrap
 
     use_recon_loss: bool = True
     recon_lambda: float = 1.0
