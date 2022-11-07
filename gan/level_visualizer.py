@@ -16,7 +16,7 @@ class MarioLevelVisualizer:
         ret = {}
         for i, c in enumerate(self.game.ascii):
             path = os.path.join(
-                self.dir, f"{self.game.name}_{self.game.version}", "sprites", f"encoding_{i}.png")
+                self.dir, f"sprites", f"encoding_{i}.png")
             if os.path.exists(path):
                 sprite = Image.open(path).convert("RGBA")
                 sprite = sprite.resize(
@@ -55,7 +55,7 @@ class GVGAILevelVisualizer:
         self.pad = padding
         self.game_description = self.read_gamefile()
         self.sprite_paths = self.sprite_mapping()
-        self.level_mapping = self.ascii_map()
+        self.level_mapping = self.game.char_to_tile
         self.tiles = self.build_tiles()
         self.ascii_tiles = self.build_ascii_tiles()
 

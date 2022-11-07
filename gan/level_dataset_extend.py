@@ -104,7 +104,7 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
 
     if env_def.name == 'mario':
         visualizer = MarioLevelVisualizer(env_def, os.path.dirname(
-            __file__) + f"/ data/level/{game_name}_{version}/")
+            __file__) + f"/data/level/{game_name}_{version}/")
     else:
         visualizer = GVGAILevelVisualizer(env_def)
 
@@ -121,11 +121,29 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
 
     for j in range(dataset_size):
         index = j % len(lvl_strs)
-        lvl_str_re = lvl_strs[index]
+        lvl_str = lvl_strs[index]
+        lvl_str = lvl_str.split()
+        target_shape = env_def.model_shape[-1]
+
+        # PADDING
+        for i in range(target_shape[0]):
+            s = ''
+            if i < len(lvl_str):
+                s = lvl_str[i]
+            width = len(s)
+            for _ in range(target_shape[1] - width):
+                s += env_def.ascii[1]
+            if i < len(lvl_str):
+                lvl_str[i] = s
+            else:
+                lvl_str.append(s)
+
+        lvl_str = "\n".join(lvl_str)
+
         if extend_data:
-            s = make_another[game_name](lvl_str_re)
+            s = make_another[game_name](lvl_str)
         else:
-            s = lvl_str_re
+            s = lvl_str
         with open(
             train_dir_path + f"{game_name}_{str(j)}", mode="w"
         ) as f:

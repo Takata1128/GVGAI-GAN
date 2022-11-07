@@ -7,7 +7,7 @@ from torchinfo import summary
 from utils import (
     tensor_to_level_str,
     check_playable_zelda,
-    check_level_similarity,
+    check_level_similarity_zelda,
     check_object_similarity,
     check_shape_similarity,
 )
@@ -163,7 +163,7 @@ class Evaluater:
         n_shape_level = 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
-                res_level += check_level_similarity(
+                res_level += check_level_similarity_zelda(
                     level_strs[i], level_strs[j])
                 obj_tmp = check_object_similarity(level_strs[i], level_strs[j])
                 if obj_tmp is not None:
@@ -176,7 +176,7 @@ class Evaluater:
                     n_shape_level += 1
                 res_duplicate += (
                     1
-                    if check_level_similarity(level_strs[i], level_strs[j]) >= 0.90
+                    if check_level_similarity_zelda(level_strs[i], level_strs[j]) >= 0.90
                     else 0
                 )
                 n_level += 1

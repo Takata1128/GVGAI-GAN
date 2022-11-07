@@ -22,25 +22,34 @@ GameDescription["aliens"] = {
 GameDescription["zelda"] = {
     "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
     "ascii_to_tile": {
-        "goal": ["floor", "goal"],
         "": ["floor"],
-        "floor": ["floor"],
+        "wall": ["wall"],
+        "goal": ["floor", "goal"],
         "key": ["floor", "key"],
-        "nokey": ["floor", "nokey"],
-        "withkey": ["floor", "withkey"],
         "sword": ["floor", "sword"],
         "monsterQuick": ["floor", "monsterQuick"],
         "monsterNormal": ["floor", "monsterNormal"],
         "monsterSlow": ["floor", "monsterSlow"],
-        "wall": ["wall"],
+        "nokey": ["floor", "nokey"],
+        "withkey": ["floor", "withkey"],
     },
-    "mapping": [13, 0, 3, 4, 10, 11, 12, 7],
+    'char_to_tile': {
+        '.': ['floor'],
+        'w': ['wall'],
+        'g': ['floor', 'goal'],
+        '+': ['floor', 'key'],
+        '1': ['floor', 'monsterQuick'],
+        '2': ['floor', 'monsterNormal'],
+        '3': ['floor', 'monsterSlow'],
+        'A': ['floor', 'nokey'],
+    },
+    "mapping": None,
     "state_shape": (8, 12, 16),
     "model_shape": [(3, 4), (6, 8), (12, 16)],
     "requirements": ["A", "g", "+"],
 }
 GameDescription["mario"] = {
-    "ascii": ["X", "S", "-", "Q", "E", "<", ">", "[", "]", "?"],
+    "ascii": ["X", "S", '-', "Q", "E", "<", ">", "[", "]", "?"],
     "mapping": None,
     "state_shape": (10, 28, 28),
     "model_shape": [(7, 7), (14, 14), (28, 28)],
@@ -52,6 +61,7 @@ GameDescription["roguelike"] = {
     "ascii": [".", 'w', "x", "s", "g", "r", "p", "h", "k", 'l', 'm', 'A'],
     "ascii_to_tile": {
         "": ["floor"],
+        'wall': ['wall'],
         "exit": ["floor", "exit"],
         "weapon": ["floor", 'weapon'],
         "gold": ["floor", 'gold'],
@@ -62,33 +72,50 @@ GameDescription["roguelike"] = {
         "lock": ["floor", "lock"],
         "market": ["floor", "market"],
         "avatar": ["floor", "avatar"],
-        'wall': ['wall']
     },
-    "state_shape": (12, 21, 22),
-    "model_shape": [(5, 5), (10, 11), (21, 22)],
-    "requirements": ["x", 'A'],
+    'char_to_tile': {
+        '.': ['floor'],
+        'w': ['wall'],
+        'x': ["floor", "exit"],
+        's': ["floor", 'weapon'],
+        'g': ["floor", 'gold'],
+        'r': ["floor", "spider"],
+        'p': ["floor", "phantom"],
+        'h': ["floor", "health"],
+        'k': ["floor", "key"],
+        'l': ["floor", "lock"],
+        'm': ["floor", "market"],
+        'A': ["floor", "avatar"],
+
+    },
+    "state_shape": (12, 24, 24),
+    "model_shape": [(6, 6), (12, 12), (24, 24)],
+    "requirements": ["x", 'A', 'k'],
+    'mapping': None
 }
 
 
 class Env:
-    def __init__(self, name, version='v1'):
+    def __init__(self, name, version):
         self.name = name
         self.version = version
         try:
             self.ascii = GameDescription[name]["ascii"]
-            self.mapping = GameDescription[name]['mapping']
+            # self.mapping = GameDescription[name]['mapping']
             self.state_shape = GameDescription[name]["state_shape"]
             self.model_shape = GameDescription[name]["model_shape"]
-            self.requirements = GameDescription[name]["requirements"]
+            # self.requirements = GameDescription[name]["requirements"]
             self.ascii_to_tile = GameDescription[name]["ascii_to_tile"]
         except:
             raise Exception(name + " data not implemented in env.py")
 
+        if 'char_to_tile' in GameDescription[name]:
+            self.char_to_tile = GameDescription[name]['char_to_tile']
         self.map_level = np.vectorize(lambda x: self.ascii[x])
 
     def get_original_levels(self, path=None):
         if path is not None:
-            file_pathes = glob(path+"/*")
+            file_pathes = glob(path + "/*")
             levels = []
             for f_name in file_pathes:
                 with open(f_name, 'r') as f:
@@ -98,7 +125,7 @@ class Env:
         else:
             dir_path = os.path.join(
                 gym_gvgai.dir, "envs", "games", f"{self.name}_{self.version}")
-            file_pathes = glob(dir_path+"/*")
+            file_pathes = glob(dir_path + "/*")
             levels = []
             for f_name in file_pathes:
                 if f_name == os.path.join(
@@ -118,7 +145,7 @@ class Env:
         for i, c in enumerate(lvl_str):
             if c == "\n":
                 continue
-            ret[self.ascii.index(c), index//self.state_shape[2],
+            ret[self.ascii.index(c), index // self.state_shape[2],
                 index % self.state_shape[2]] = 1
             index += 1
         return ret
