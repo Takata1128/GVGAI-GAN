@@ -33,11 +33,13 @@ def div_loss(latent: torch.Tensor, fake: torch.Tensor, loss_type: str, lambda_di
     if loss_type == "l1":
         return -torch.abs(fake[1:] - fake[:-1]).mean() * lambda_div
     elif loss_type == 'l1-latent':
-        return -torch.abs(fake[1:] - fake[:-1]).mean() / torch.abs(latent[1:] - latent[:-1]).mean() * lambda_div
+        return -(torch.abs(fake[1:] - fake[:-1]).mean() / torch.abs(latent[1:] - latent[:-1]).mean()) * lambda_div
     elif loss_type == "l2":
         return -((fake[1:] - fake[:-1]) ** 2).mean() * lambda_div
-    else:
+    elif loss_type is None:
         return torch.tensor(0)
+    else:
+        raise NotImplementedError()
 
 
 def recon_loss(recon: torch.Tensor, real: torch.Tensor):

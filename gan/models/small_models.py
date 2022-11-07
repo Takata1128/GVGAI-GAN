@@ -128,6 +128,7 @@ class ConditionalSelfAttention(nn.Module):
     def forward(self, x, label):
         x = self.attn(x)
         label = label.float()
+        label = torch.softmax(label, -1)
         u = self.embedding(label)
         u = u.view(-1, self.channels, 1, 1)
         u = self.resize(u)
@@ -234,7 +235,7 @@ class Generator(nn.Module):
                 self.self_attn0 = Self_Attn(layer_input_channels)
 
         self.block1 = GenBlock(
-            layer_input_channels, filters * 2, use_deconv_g
+            layer_input_channels, filters * 2, True, use_deconv_g
         )
         layer_input_channels = filters * 2
 
@@ -247,7 +248,7 @@ class Generator(nn.Module):
                 self.self_attn1 = Self_Attn(layer_input_channels)
 
         self.block2 = GenBlock(
-            layer_input_channels, filters, use_deconv_g
+            layer_input_channels, filters, True, use_deconv_g
         )
         layer_input_channels = filters
 
@@ -429,7 +430,8 @@ class Decoder(nn.Module):
         self.use_conditional = use_conditional
         layer_input_channels = in_channel
 
-        self.block1 = GenBlock(in_channel, filters * 2, use_bn=True)
+        self.block1 = GenBlock(in_channel, filters * 2,
+                               use_bn=True, use_deconv=True)
         layer_input_channels = filters * 2
 
         if self.use_self_attention:
@@ -440,7 +442,8 @@ class Decoder(nn.Module):
             else:
                 self.attn1 = Self_Attn(layer_input_channels)
 
-        self.block2 = GenBlock(layer_input_channels, filters, use_bn=True)
+        self.block2 = GenBlock(layer_input_channels,
+                               filters, use_bn=True, use_deconv=True)
         layer_input_channels = filters
 
         if self.use_self_attention:

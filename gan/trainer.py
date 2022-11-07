@@ -8,6 +8,7 @@ import numpy as np
 import random
 import shutil
 
+
 from . import loss
 from .env import Env
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
@@ -17,8 +18,18 @@ from .config import DataExtendConfig, BaseConfig
 from .utils import (
     check_level_similarity,
     check_playable,
-    tensor_to_level_str
+    tensor_to_level_str,
+    kmeans_select,
+    evaluation,
+    get_property
 )
+
+map_shapes = {
+    'mario_v0': [14, 28],
+    'zelda_v0': [9, 13],
+    'zelda_v1': [12, 16],
+    'rogue_v0': [22, 23],
+}
 
 
 class Trainer:
@@ -57,6 +68,7 @@ class Trainer:
         self.train_loader = DataLoader(
             train_dataset, batch_size=config.train_batch_size, shuffle=True, drop_last=True
         )
+        self.dataset_properties_dicts = self._init_dataset_properties()
 
         if isinstance(self.config, DataExtendConfig):
             generated_levels_path = os.path.join(self.config.level_data_path,
@@ -282,7 +294,7 @@ class Trainer:
 
                         # bootstrap
                         unique_playable_levels = list(set(playable_levels))
-                        if self.config.bootstrap and len(unique_playable_levels) > 1:
+                        if epoch % self.bootstrap_epoch == 0 and self.config.bootstrap is not None and len(unique_playable_levels) > 1:
                             unique_playable_levels = self._bootstrap(
                                 unique_playable_levels)
 
@@ -332,6 +344,7 @@ class Trainer:
                         self._build_model()
                         self.last_reset_steps = self.step
 
+            self._evaluation()
             self._save_models(model_save_path, None, None)
 
     def _generate_levels(self, latents, labels):
@@ -345,7 +358,7 @@ class Trainer:
         p_level = torch.nn.Softmax2d()(
             self.generator(self.latents_for_show, self.labels_for_show))
         level_strs = tensor_to_level_str(
-            self.config.env_name, p_level)
+            self.config.env_name, p_level[:, :, :map_shapes[self.config.env_fullname][0], :map_shapes[self.config.env_fullname][1]])
         p_level_img = [
             torch.Tensor(
                 np.array(self.level_visualizer.draw_level(lvl)).transpose(
@@ -417,68 +430,91 @@ class Trainer:
 
     def _bootstrap(self, unique_playable_levels: list[str]):
         if self.config.bootstrap == "random":
-            list = random.sample(
-                unique_playable_levels, min(len(unique_playable_levels), self.config.bootstrap_max_count))
-            for level in list:
-                self._level_expand(level)
+            result_levels = unique_playable_levels
+        elif self.config.bootstrap == 'baseline':  # PCA + elbow + kmeansで追加するデータを決定
+            result_levels = kmeans_select(
+                unique_playable_levels, self.config, self.env)
         elif self.config.bootstrap == "smart":  # データセット内のステージと比較して類似度が低いもののみを追加
-            dataset_levels = []
-            # データセットのレベルたち
-            for file in self.dataset_files:
-                with open(os.path.join(self.config.level_data_path, f'{self.config.env_name}_{self.config.env_version}', self.config.dataset_type, file), mode='r') as f:
-                    s = f.read()
-                    dataset_levels.append(s)
-            result_levels = []
-
-            # フィルタ処理
-            if self.config.bootstrap_filter == None:
-                result_levels = unique_playable_levels
+            # 類似度フィルタ
+            if self.config.bootstrap_hamming_filter == None:
+                filtered_levels = unique_playable_levels
             else:
+                # データセットのレベルたち
+                dataset_levels = []
+                for file in self.dataset_files:
+                    with open(os.path.join(self.config.level_data_path, self.config.dataset_type, file), mode='r') as f:
+                        s = f.read()
+                        dataset_levels.append(s)
+                filtered_levels = []
                 for generated_level in unique_playable_levels:
                     dup = False
                     for ds_level in dataset_levels:
                         sim = check_level_similarity(
                             generated_level.split(), ds_level.split(), self.config.env_fullname)
-                        if sim >= self.config.bootstrap_filter:
+                        if sim >= self.config.bootstrap_hamming_filter:
                             dup = True
                             break
                     if not dup:
-                        result_levels.append(generated_level)
+                        filtered_levels.append(generated_level)
 
-            # 多すぎないように
-            selected = random.sample(
-                result_levels, min(len(result_levels), self.config.bootstrap_max_count))
+            # プロパティフィルタ
+            if self.config.bootstrap_property_filter is not None:
+                tmp_levels = []
+                for level_str in filtered_levels:
+                    property = get_property(
+                        level_str, self.config.env_fullname)
+                    ok = True
+                    for i, pd in enumerate(self.dataset_properties_dicts):
+                        if (property[i] in pd) and (pd[property[i]] >= len(self.dataset_files) * self.config.bootstrap_property_filter):
+                            ok = False
+                    if ok:
+                        tmp_levels.append(level_str)
 
-            for level in selected:
-                self._level_add(level)
-                self.bootstrap_count += 1
-                # generatedフォルダにも追加
-                if isinstance(self.config, DataExtendConfig):
-                    with open(
-                        os.path.join(self.config.level_data_path,
-                                     f'{self.config.env_name}_{self.config.env_version}', "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
-                    ) as f:
-                        f.write(level)
-                        self.data_index += 1
+                filtered_levels = tmp_levels
+                print("Property : ")
+                for property, count in self.dataset_properties_dicts[0].items():
+                    print(f"{property}={count} , ", end="")
+                print()
+            else:
+                pass
 
-            wandb.log({"Dataset Size": len(self.dataset_files)})
-            # update dataloader
-            # Dataset
-            del self.train_loader
-            train_dataset = LevelDataset(
-                self.config.level_data_path,
-                self.env,
-                datamode=self.config.dataset_type,
-                transform=None,
-                latent_size=self.config.latent_size,
-            )
-            self.train_loader = DataLoader(
-                train_dataset, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
-            )
-            return selected
+            # K-meansで選択
+            if self.config.bootstrap_kmeans_filter and len(filtered_levels) > 1:
+                result_levels = kmeans_select(
+                    filtered_levels, self.config, self.env)
+            else:
+                result_levels = filtered_levels
         else:
-            NotImplementedError(
+            raise NotImplementedError(
                 f'{self.config.bootstrap} bootstrap is not implemented!!')
+        # 多すぎないように
+        selected = random.sample(
+            result_levels, min(len(result_levels), self.config.bootstrap_max_count))
+        for level in selected:
+            self._level_add(level)
+            self.bootstrap_count += 1
+            # generatedフォルダにも追加
+            if isinstance(self.config, DataExtendConfig):
+                with open(
+                    os.path.join(self.config.level_data_path, "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
+                ) as f:
+                    f.write(level)
+                    self.data_index += 1
+        wandb.log({"Dataset Size": len(self.dataset_files)})
+        # update dataloader
+        # Dataset
+        del self.train_loader
+        train_dataset = LevelDataset(
+            self.config.level_data_path,
+            self.env,
+            datamode=self.config.dataset_type,
+            transform=None,
+            latent_size=self.config.latent_size,
+        )
+        self.train_loader = DataLoader(
+            train_dataset, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
+        )
+        return selected
 
     def _level_add(self, level_str):
         index = len(self.dataset_files)
@@ -486,10 +522,16 @@ class Trainer:
         self.dataset_files.append(file)
         with open(
             os.path.join(self.config.level_data_path,
-                         f'{self.config.env_name}_{self.config.env_version}', self.config.dataset_type, file),
+                         self.config.dataset_type, file),
             "w",
         ) as f:
             f.write(level_str)
+            property = get_property(level_str, self.config.env_fullname)
+            for i, pd in enumerate(self.dataset_properties_dicts):
+                if property[i] in pd:
+                    pd[property[i]] += 1
+                else:
+                    pd[property[i]] = 1
 
     def _discriminator_update(self, real_images_logit, fake_images_logit, label=None):
         """
@@ -569,10 +611,7 @@ class Trainer:
         )
 
     def _calc_level_similarity(self, level_strs):
-        res_level, res_object, res_shape, res_duplicate = 0, 0, 0, 0
-        n_level = 0
-        n_object_level = 0
-        n_shape_level = 0
+        res_level, res_duplicate, n_level = 0, 0, 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
                 sim = check_level_similarity(
@@ -589,22 +628,22 @@ class Trainer:
             res_duplicate / n_level,
         )
 
-    def _level_expand(self, level_str):
-        index = np.random.randint(0, len(self.dataset_files))
-        file = self.dataset_files[index]
-        with open(
-            os.path.join(self.config.level_data_path,
-                         self.config.env_name, self.config.dataset_type, file),
-            "w",
-        ) as f:
-            f.write(level_str)
+    # def _level_expand(self, level_str):
+    #     index = np.random.randint(0, len(self.dataset_files))
+    #     file = self.dataset_files[index]
+    #     with open(
+    #         os.path.join(self.config.level_data_path,
+    #                      self.config.env_name, self.config.dataset_type, file),
+    #         "w",
+    #     ) as f:
+    #         f.write(level_str)
 
     def _get_labels(self, n_labels):
         labels = []
         for i in range(n_labels):
             file = self.dataset_files[np.random.randint(
                 len(self.dataset_files))]
-            with open(os.path.join(self.config.level_data_path, f'{self.config.env_name}_{self.config.env_version}', self.config.dataset_type, file), "r") as f:
+            with open(os.path.join(self.config.level_data_path, self.config.dataset_type, file), "r") as f:
                 datalist = f.readlines()
             # label : onehot vector of counts of map tile object.
             label = np.zeros(len(self.env.ascii))
@@ -615,3 +654,61 @@ class Trainer:
                     label[self.env.ascii.index(c)] += 1
             labels.append(label)
         return torch.tensor(np.array(labels)).float().to(self.device)
+
+    def _evaluation(self):
+        playable_levels = []
+        while True:
+            latents_for_eval = torch.randn(
+                5000,
+                self.config.latent_size,
+            ).to(self.device)
+            labels_for_eval = self._get_labels(5000)
+            output_levels = self.generator(latents_for_eval, labels_for_eval)
+            level_strs = tensor_to_level_str(
+                self.config.env_name, output_levels)
+            for level_str in level_strs:
+                if check_playable(level_str, self.config.env_fullname):
+                    playable_levels.append(level_str)
+                    if len(playable_levels) == self.config.final_evaluation_levels:
+                        break
+            print(len(playable_levels))
+            if len(playable_levels) == self.config.final_evaluation_levels:
+                break
+
+        playable_levels = []
+        latents_for_eval = torch.randn(
+            self.config.final_evaluation_levels,
+            self.config.latent_size,
+        ).to(self.device)
+        labels_for_eval = self._get_labels(self.config.final_evaluation_levels)
+        output_levels = self.generator(latents_for_eval, labels_for_eval)
+        level_strs = tensor_to_level_str(self.config.env_name, output_levels)
+        for level_str in level_strs:
+            if check_playable(level_str, self.config.env_fullname):
+                playable_levels.append(level_str)
+
+        metrics = evaluation(playable_levels, self.config.env_fullname)
+        metrics["Final Playable Ratio"] = len(
+            playable_levels) / self.config.final_evaluation_levels
+        print("Playable Ratio:", len(playable_levels) /
+              self.config.final_evaluation_levels)
+        wandb.log(metrics)
+
+    def _init_dataset_properties(self):
+        ret = []
+        image_paths = [
+            os.path.join(self.train_loader.dataset.image_dir, name) for name in os.listdir(self.train_loader.dataset.image_dir)
+        ]
+        for path in image_paths:
+            level_str = ''
+            with open(path, mode='r') as f:
+                level_str = f.read()
+            property = get_property(level_str, self.config.env_fullname)
+            for i, p in enumerate(property):
+                if i >= len(ret):
+                    ret.append({})
+                if p in ret[i]:
+                    ret[i][p] += 1
+                else:
+                    ret[i][p] = 1
+        return ret

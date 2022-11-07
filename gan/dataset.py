@@ -20,12 +20,11 @@ class LevelDataset(Dataset):
     ):
         self.env = env
         self.image_dir = os.path.join(
-            root, f'{env.name}_{env.version}', datamode)
+            root, datamode)
         self.image_paths = [
             os.path.join(self.image_dir, name) for name in os.listdir(self.image_dir)
         ]
         self.data_length = len(self.image_paths)
-
         self.transform = transform
         self.latent_size = latent_size
 
