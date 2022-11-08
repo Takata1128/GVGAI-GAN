@@ -10,32 +10,20 @@ import shutil
 
 
 from . import loss
-from .env import Env
+from .game.env import Game
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 from .dataset import LevelDataset
 from .level_dataset_extend import prepare_dataset
 from .config import DataExtendConfig, BaseConfig
 from .utils import (
-    check_level_similarity,
-    check_playable,
-    tensor_to_level_str,
-    kmeans_select,
-    evaluation,
-    get_property
+    kmeans_select
 )
-
-map_shapes = {
-    'mario_v0': [14, 28],
-    'zelda_v0': [9, 13],
-    'zelda_v1': [12, 16],
-    'rogue_v0': [22, 23],
-}
 
 
 class Trainer:
-    def __init__(self, config: BaseConfig):
+    def __init__(self, game: Game, config: BaseConfig):
         self.config = config
-        self.env = Env(self.config.env_name, self.config.env_version)
+        self.game = game
 
         # reproducible settings
         random.seed(config.seed)
@@ -45,6 +33,7 @@ class Trainer:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
+        # device
         if config.cuda:
             self.device = torch.device(
                 f"cuda:{config.gpu_id}" if torch.cuda.is_available else "cpu")
@@ -54,51 +43,39 @@ class Trainer:
             print("device : cpu")
 
         # Dataset
-        train_dataset = LevelDataset(
+        self.dataset = LevelDataset(
             config.level_data_path,
-            self.env,
-            datamode=self.config.dataset_type,
-            transform=None,
+            self.game,
             latent_size=config.latent_size,
         )
-        # dataset files
-        self.dataset_files = os.listdir(train_dataset.image_dir)
-        print("Training Dataset :", train_dataset.image_dir)
-        # DataLoader
-        self.train_loader = DataLoader(
-            train_dataset, batch_size=config.train_batch_size, shuffle=True, drop_last=True
-        )
+        # Dataset files
+        self.dataset_files = os.listdir(self.dataset.level_dir)
+        print("Training Dataset :", self.dataset.level_dir)
         self.dataset_properties_dicts = self._init_dataset_properties()
 
         if isinstance(self.config, DataExtendConfig):
             generated_levels_path = os.path.join(self.config.level_data_path,
-                                                 f'{self.config.env_name}_{self.config.env_version}', "generated",)
+                                                 f'{self.game_name}_{self.game.version}', "generated",)
             if os.path.exists(generated_levels_path):
                 shutil.rmtree(generated_levels_path)
             os.makedirs(generated_levels_path)
 
         # Level Visualizer
-        if self.config.env_name == 'mario':
+        if self.game.name == 'mario':
             self.level_visualizer = MarioLevelVisualizer(
-                self.env, self.config.level_data_path)
+                self.game, self.config.level_data_path)
         else:
-            self.level_visualizer = GVGAILevelVisualizer(self.env)
+            self.level_visualizer = GVGAILevelVisualizer(self.game)
 
         # Network
         self._build_model()
 
         # Other
         self.playability = 0
-        self.data_index = 0
-        self.steps_per_epoch = len(self.train_loader)
-        # self.model_save_epoch = self.config.save_model_interval // (
-        #     self.config.train_batch_size * self.steps_per_epoch)
-        # self.image_save_epoch = self.config.save_image_interval // (
-        #     self.config.train_batch_size * self.steps_per_epoch)
-        # self.eval_epoch = self.config.eval_playable_interval // (
-        #     self.config.train_batch_size * self.steps_per_epoch)
-        # self.bootstrap_epoch = self.config.bootstrap_interval // (
-        #     self.config.train_batch_size * self.steps_per_epoch)
+        self.augmented_data_index = 0
+        self.max_playable_count = 0
+        self.bootstrap_count = 0
+
         self.model_save_epoch = config.save_model_epoch
         self.image_save_epoch = config.save_image_epoch
         self.eval_epoch = config.eval_epoch
@@ -107,90 +84,39 @@ class Trainer:
         print(f"image_save_epoch:{self.image_save_epoch}")
         print(f"eval_epoch:{self.eval_epoch}")
         print(f"bootstrap_epoch:{self.bootstrap_epoch}")
-
         if isinstance(self.config, DataExtendConfig):
-            self.reset_epoch = self.config.reset_weight_interval // (
-                self.config.train_batch_size * self.steps_per_epoch)
+            self.reset_epoch = self.config.reset_weight_epoch
             print(f"model_reset_epoch:{self.reset_epoch}")
-
-        self.step = 0
-        self.max_playable_count = 0
-        self.last_reset_steps = 0
-        self.bootstrap_count = 0
-        self.training_set_reset_count = 0
+            self.last_reset_steps = 0
+            self.training_set_reset_count = 0
 
     def _build_model(self):
         latent_shape = (self.config.latent_size,)
+        from .models.small_models import Generator
+        self.generator = Generator(
+            out_ch=self.game.input_shape[0],
+            shapes=self.game.model_shape,
+            z_shape=latent_shape,
+            filters=self.config.generator_filters,
+            use_linear4z2features_g=self.config.use_linear4z2features_g,
+            use_self_attention=self.config.use_self_attention_g,
+            use_conditional=self.config.use_conditional,
+            use_deconv_g=self.config.use_deconv_g
+        ).to(self.device)
 
-        if self.config.model_type == "normal":
-            from .models.models import Generator
-            self.generator = Generator(
-                out_dim=self.config.input_shape[0],
-                shapes=self.config.model_shapes,
-                z_shape=latent_shape,
-                filters=self.config.generator_filters,
-                is_self_attention=self.config.use_self_attention_g,
-                is_conditional=self.config.use_conditional,
-            ).to(self.device)
-        elif self.config.model_type == "small":
-            from .models.small_models import Generator
-            self.generator = Generator(
-                out_ch=self.config.input_shape[0],
-                shapes=self.config.model_shapes,
-                z_shape=latent_shape,
-                filters=self.config.generator_filters,
-                use_linear4z2features_g=self.config.use_linear4z2features_g,
-                use_self_attention=self.config.use_self_attention_g,
-                use_conditional=self.config.use_conditional,
-                use_deconv_g=self.config.use_deconv_g
-            ).to(self.device)
-        elif self.config.model_type == 'sa':
-            from .models.sa_models import Generator
-            self.generator = Generator(
-                out_dim=self.config.input_shape[0],
-                shapes=self.config.model_shapes,
-                z_shape=latent_shape,
-                filters=self.config.generator_filters,
-            )
-        else:
-            raise NotImplementedError(
-                f"{self.config.model_type} model is not implemented.")
-
-        if self.config.model_type == 'normal':
-            from .models.models import Discriminator
-            self.discriminator = Discriminator(
-                in_ch=self.config.input_shape[0],
-                shapes=self.config.model_shapes[::-1],
-                filters=self.config.discriminator_filters,
-                is_self_attention=self.config.use_self_attention_d,
-                is_minibatch_std=self.config.use_minibatch_std,
-                is_spectral_norm=self.config.use_spectral_norm,
-                is_conditional=self.config.use_conditional,
-            ).to(self.device)
-        elif self.config.model_type == 'small':
-            from .models.small_models import Discriminator
-            self.discriminator = Discriminator(
-                in_ch=self.config.input_shape[0],
-                shapes=self.config.model_shapes[::-1],
-                filters=self.config.discriminator_filters,
-                use_bn=self.config.use_bn_d,
-                use_self_attention=self.config.use_self_attention_d,
-                use_minibatch_std=self.config.use_minibatch_std,
-                use_recon_loss=self.config.use_recon_loss,
-                use_conditional=self.config.use_conditional,
-                use_sn=self.config.use_sn_d,
-                use_pooling=self.config.use_pooling_d
-            ).to(self.device)
-        elif self.config.model_type == 'sa':
-            from .models.sa_models import Discriminator
-            self.discriminator = Discriminator(
-                in_ch=self.config.input_shape[0],
-                shapes=self.config.model_shapes[::-1],
-                filters=self.config.discriminator_filters,
-            )
-        else:
-            raise NotImplementedError(
-                f"{self.config.model_type} model is not implemented.")
+        from .models.small_models import Discriminator
+        self.discriminator = Discriminator(
+            in_ch=self.game.input_shape[0],
+            shapes=self.game.model_shape[::-1],
+            filters=self.config.discriminator_filters,
+            use_bn=self.config.use_bn_d,
+            use_self_attention=self.config.use_self_attention_d,
+            use_minibatch_std=self.config.use_minibatch_std,
+            use_recon_loss=self.config.use_recon_loss,
+            use_conditional=self.config.use_conditional,
+            use_sn=self.config.use_sn_d,
+            use_pooling=self.config.use_pooling_d
+        ).to(self.device)
 
         # Optimizer
         self.optimizer_g = torch.optim.RMSprop(
@@ -203,162 +129,147 @@ class Trainer:
     def train(self):
         wandb.login()
         metrics = {}
-        with wandb.init(project=f"{self.config.env_name} Level GAN by {self.config.model_type} model", config=self.config.__dict__):
+        with wandb.init(project=f"Generation of {self.game.name} Level by GAN", config=self.config.__dict__):
             # check model summary
             self.generator.summary(
                 batch_size=self.config.train_batch_size, device=self.device)
             self.discriminator.summary(
                 batch_size=self.config.train_batch_size, device=self.device)
 
-            self.step = 0
-            self.latents_for_show = torch.randn(
-                9, self.config.latent_size,).to(self.device)
-            self.labels_for_show = self._get_labels(9).int()
-
             # model_save_path
-            model_save_path = os.path.join(
+            self.model_save_path = os.path.join(
                 self.config.checkpoints_path,
                 self.config.name + "-" + wandb.run.name.split("-")[-1],
             )
-            os.makedirs(model_save_path)
+            os.makedirs(self.model_save_path)
 
-            for epoch in range(1, 1000000):
+            self.latents_for_show, _, self.labels_for_show = self.dataset.sample(
+                9)
+            self.latents_for_show = self.latents_for_show.to(
+                self.device).float()
+            self.labels_for_show = self.labels_for_show.to(self.device).int()
+
+            self.step = 0
+
+            while self.step < self.config.steps + 1:
+                self.step += 1
                 self.generator.train()
-                for latent, real, label in self.train_loader:
-                    self.step += 1
-                    latent, real, label = (
-                        latent.to(self.device).float(),
-                        real.to(self.device).float(),
-                        label.to(self.device).int(),
-                    )
-                    fake_logit = self.generator(latent, label)
+                latent, real, label = self.dataset.sample(
+                    batch_size=self.config.train_batch_size)
+                latent, real, label = (
+                    latent.to(self.device).float(),
+                    real.to(self.device).float(),
+                    label.to(self.device).int(),
+                )
+                fake_logit = self.generator(latent, label)
+                Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
+                    real, fake_logit, label
+                )
+                generator_loss, div_loss = self._generator_update(
+                    latent, fake_logit, label)
 
-                    Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
-                        real, fake_logit, label
-                    )
-                    generator_loss, div_loss = self._generator_update(
-                        latent, fake_logit, label)
+                metrics = {}
+                metrics["D(x)[Discriminator]"] = Dx
+                metrics["D(G(z))[Discriminator]"] = DGz_d
+                metrics["Discriminator Loss"] = discriminator_loss
+                metrics["Generator Loss"] = generator_loss
+                if self.config.div_loss:
+                    metrics["Generator Div Loss"] = div_loss
+                if self.config.use_recon_loss:
+                    metrics["Reconstruction Loss"] = recon_loss
+                wandb.log(metrics, step=self.step)
+                self.after_step()
+            self._evaluation()
+            self._save_models(self.model_save_path, None, None)
 
-                    metrics["D(x)[Discriminator]"] = Dx
-                    metrics["D(G(z))[Discriminator]"] = DGz_d
-                    metrics["Discriminator Loss"] = discriminator_loss
-                    metrics["Generator Loss"] = generator_loss
-                    if self.config.div_loss != "none":
-                        metrics["Generator Div Loss"] = div_loss
-                    if self.config.use_recon_loss:
-                        metrics["Reconstruction Loss"] = recon_loss
-                    metrics["Epoch"] = epoch
-                    wandb.log(metrics, step=self.step)
+    def after_step(self):
+        self.generator.eval()
+        with torch.no_grad():
+            if self.step % self.image_save_epoch == 0:
+                self._save_images()
+                # if self.config.use_recon_loss:
+                #     self._save_recon_images(real, label)
 
-                    if self.step >= self.config.steps:
-                        break
+            if self.step % self.eval_epoch == 0 or self.step % self.bootstrap_epoch == 0:
+                # generate levels
+                latents, _, labels = self.dataset.sample(
+                    self.config.eval_playable_counts)
+                latents = latents.to(self.device).float()
+                labels = labels.to(self.device).int()
 
-                if self.step >= self.config.steps:
-                    break
+                levels = self._generate_levels(latents, labels)
+                playable_levels = []
+                for level_str in levels:
+                    if self.game.check_playable(level_str):
+                        playable_levels.append(level_str)
+                wandb.log(
+                    {
+                        "Playable Ratio": len(playable_levels)
+                        / self.config.eval_playable_counts
+                    }, step=self.step
+                )
 
-                self.generator.eval()
-                with torch.no_grad():
-                    if epoch % self.image_save_epoch == 0:
+                # eval
+                if self.step % self.eval_epoch == 0:
+                    self._eval_models(levels, playable_levels)
+
+                # save model
+                if self.step % self.model_save_epoch == 0:
+                    self._save_models(
+                        self.model_save_path, self.step, None)
+
+                # bootstrap
+                unique_playable_levels = list(set(playable_levels))
+                if self.step % self.bootstrap_epoch == 0 and self.config.bootstrap is not None and len(unique_playable_levels) > 1:
+                    unique_playable_levels = self._bootstrap(
+                        unique_playable_levels)
+
+                # initialize process in augmentation model
+                if isinstance(self.config, DataExtendConfig):
+                    # 一定数生成したらGANの重みリセット
+                    if self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
+                        print("reset weights of model.")
                         self._save_images()
-                        if self.config.use_recon_loss:
-                            self._save_recon_images(real, label)
-
-                    if epoch % self.eval_epoch == 0 or epoch % self.bootstrap_epoch == 0:
-                        # bootstrap and data-extend
-                        latents = torch.randn(
-                            self.config.eval_playable_counts,
-                            self.config.latent_size,
-                        ).to(self.device)
-                        labels = self._get_labels(
-                            self.config.eval_playable_counts).int()
-                        levels = self._generate_levels(latents, labels)
-                        playable_levels = []
-                        for level_str in levels:
-                            if check_playable(level_str, self.config.env_fullname):
-                                playable_levels.append(level_str)
-                        wandb.log(
-                            {
-                                "Playable Ratio": len(playable_levels)
-                                / self.config.eval_playable_counts
-                            }
+                        # if self.config.use_recon_loss:
+                        #     self._save_recon_images(real, label)
+                        self._build_model()
+                        self.last_reset_steps = self.step
+                        self.bootstrap_count = 0
+                    # 一定数生成したら学習データリセット
+                    if self.augmented_data_index > self.config.reset_train_dataset_th * (self.training_set_reset_count + 1):
+                        print(
+                            f"Generated size exceeds {self.augmented_data_index}, so reset training dataset.")
+                        self.training_set_reset_count += 1
+                        prepare_dataset(
+                            self.game, seed=self.config.seed, extend_data=self.config.clone_data, flip=self.config.flip_data
                         )
+                        # Update dataset
+                        self.dataset.update()
 
-                        # eval
-                        if epoch % self.eval_epoch == 0:
-                            self._eval_models(levels, playable_levels)
-
-                        # save model
-                        if epoch % self.model_save_epoch == 0:
-                            self._save_models(
-                                model_save_path, epoch, None)
-
-                        # bootstrap
-                        unique_playable_levels = list(set(playable_levels))
-                        if epoch % self.bootstrap_epoch == 0 and self.config.bootstrap is not None and len(unique_playable_levels) > 1:
-                            unique_playable_levels = self._bootstrap(
-                                unique_playable_levels)
-
-                        if isinstance(self.config, DataExtendConfig):
-                            # 一定数生成したらGANの重みリセット
-                            if self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
-                                print("reset weights of model.")
-                                self._save_images()
-                                if self.config.use_recon_loss:
-                                    self._save_recon_images(real, label)
-                                self._build_model()
-                                self.last_reset_steps = self.step
-                                self.bootstrap_count = 0
-                            # 一定数生成したら学習データリセット
-                            if self.data_index > self.config.reset_train_dataset_th * (self.training_set_reset_count + 1):
-                                print(
-                                    f"Generated size exceeds {self.data_index}, so reset training dataset.")
-                                self.training_set_reset_count += 1
-                                prepare_dataset(
-                                    seed=self.config.seed, extend_data=self.config.clone_data, flip=self.config.flip_data, dataset_size=self.config.dataset_size, game_name=self.config.env_name, version=self.config.env_version
-                                )
-                                # Dataset
-                                del self.train_loader
-                                train_dataset = LevelDataset(
-                                    self.config.level_data_path,
-                                    self.env,
-                                    datamode=self.config.dataset_type,
-                                    transform=None,
-                                    latent_size=self.config.latent_size,
-                                )
-                                self.dataset_files = os.listdir(
-                                    train_dataset.image_dir)
-                                self.train_loader = DataLoader(
-                                    train_dataset, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
-                                )
-
-                            # 全体である程度生成したらデータ拡張ストップ
-                            if self.data_index >= self.config.stop_generate_count:
-                                print(
-                                    f"Generated size exceeds {self.data_index}, so stop generation.")
-                                break
-
-                    # 一定期間たったら強制リセット
-                    if isinstance(self.config, DataExtendConfig) and self.step - self.last_reset_steps >= 3000:
+                    # 一定期間たったらモデルを強制リセット
+                    if self.step - self.last_reset_steps >= 3000:
                         print(
                             f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
                         self._build_model()
                         self.last_reset_steps = self.step
 
-            self._evaluation()
-            self._save_models(model_save_path, None, None)
+                    # 全体である程度生成したらデータ拡張ストップ
+                    if self.augmented_data_index >= self.config.stop_generate_count:
+                        print(
+                            f"Generated size exceeds {self.augmented_data_index}, so stop generation.")
+                        # break
 
     def _generate_levels(self, latents, labels):
         p_level = torch.softmax(
             self.generator(latents, labels), dim=1)
-        level_strs = tensor_to_level_str(
-            self.config.env_name, p_level)
+        level_strs = self.game.level_tensor_to_strs(p_level)
         return level_strs
 
     def _save_images(self):
         p_level = torch.nn.Softmax2d()(
             self.generator(self.latents_for_show, self.labels_for_show))
-        level_strs = tensor_to_level_str(
-            self.config.env_name, p_level[:, :, :map_shapes[self.config.env_fullname][0], :map_shapes[self.config.env_fullname][1]])
+        level_strs = self.game.level_tensor_to_strs(
+            p_level[:, :, :self.game.map_shape[0], :self.game.map_shape[1]])
         p_level_img = [
             torch.Tensor(
                 np.array(self.level_visualizer.draw_level(lvl)).transpose(
@@ -372,12 +283,12 @@ class Trainer:
             p_level_img, nrow=3, padding=0)
         images = wandb.Image(
             grid_level_img, caption="generated levels")
-        wandb.log({"Generated Levels": images})
+        wandb.log({"Generated Levels": images}, self.step)
 
     def _save_recon_images(self, real, label):
         _, recon = self.discriminator(real[:9], label[:9])
-        real_level_strs = tensor_to_level_str(
-            self.config.env_name, real[:9]
+        real_level_strs = self.game.level_tensor_to_strs(
+            real[:9]
         )
         real_level_img = [
             torch.Tensor(
@@ -388,8 +299,8 @@ class Trainer:
             )
             for lvl in real_level_strs
         ]
-        recon_level_strs = tensor_to_level_str(
-            self.config.env_name, recon
+        recon_level_strs = self.game.level_tensor_to_strs(
+            recon
         )
         recon_level_img = [
             torch.Tensor(
@@ -406,21 +317,21 @@ class Trainer:
             recon_level_img, nrow=3, padding=0)
         images = wandb.Image(
             real_level_img, caption="real levels")
-        wandb.log({"Real Levels": images})
+        wandb.log({"Real Levels": images}, self.step)
         images = wandb.Image(
             recon_level_img, caption="reconstructed levels")
-        wandb.log({"Reconstructed Levels": images})
+        wandb.log({"Reconstructed Levels": images}, self.step)
 
-    def _eval_models(self, level_strs, playable_levels):
+    def _eval_models(self, level_strs: list[str], playable_levels: list[str]):
         for i in range(len(level_strs)):
             level_strs[i] = level_strs[i].split()
         (
             level_similarity,
-            duplicate_ratio,
+            duplication_rate,
         ) = self._calc_level_similarity(level_strs)
 
-        wandb.log({"Level Similarity Ratio": level_similarity})
-        wandb.log({"Duplicate Ratio": duplicate_ratio})
+        wandb.log({"Level Similarity Ratio": level_similarity}, self.step)
+        wandb.log({"Duplicate Ratio": duplication_rate}, self.step)
 
         if len(playable_levels) > self.max_playable_count:
             self.max_playable_count = len(playable_levels)
@@ -433,7 +344,7 @@ class Trainer:
             result_levels = unique_playable_levels
         elif self.config.bootstrap == 'baseline':  # PCA + elbow + kmeansで追加するデータを決定
             result_levels = kmeans_select(
-                unique_playable_levels, self.config, self.env)
+                unique_playable_levels, self.config, self.game)
         elif self.config.bootstrap == "smart":  # データセット内のステージと比較して類似度が低いもののみを追加
             # 類似度フィルタ
             if self.config.bootstrap_hamming_filter == None:
@@ -442,30 +353,40 @@ class Trainer:
                 # データセットのレベルたち
                 dataset_levels = []
                 for file in self.dataset_files:
-                    with open(os.path.join(self.config.level_data_path, self.config.dataset_type, file), mode='r') as f:
+                    with open(os.path.join(self.config.level_data_path, file), mode='r') as f:
                         s = f.read()
                         dataset_levels.append(s)
                 filtered_levels = []
                 for generated_level in unique_playable_levels:
                     dup = False
                     for ds_level in dataset_levels:
-                        sim = check_level_similarity(
-                            generated_level.split(), ds_level.split(), self.config.env_fullname)
+                        sim = self.game.check_similarity(
+                            generated_level.split(), ds_level.split())
                         if sim >= self.config.bootstrap_hamming_filter:
                             dup = True
                             break
                     if not dup:
                         filtered_levels.append(generated_level)
 
+            print(f"Filtered by Hamming: {len(filtered_levels)}")
+
             # プロパティフィルタ
             if self.config.bootstrap_property_filter is not None:
+                # min_values = []
+                # for i, pd in enumerate(self.dataset_properties_dicts):
+                #     min_v = 1e9
+                #     for key, values in pd.items():
+                #         min_v = min(min_v, values)
+                #     min_values.append(min_v)
+
                 tmp_levels = []
                 for level_str in filtered_levels:
-                    property = get_property(
-                        level_str, self.config.env_fullname)
+                    property = self.game.get_property(level_str)
                     ok = True
                     for i, pd in enumerate(self.dataset_properties_dicts):
-                        if (property[i] in pd) and (pd[property[i]] >= len(self.dataset_files) * self.config.bootstrap_property_filter):
+                        if (property[i] in pd) and (pd[property[i]] >= self.dataset.data_length * self.config.bootstrap_property_filter):
+                            print(
+                                f"{pd[property[i]]} >= {self.dataset.data_length * self.config.bootstrap_property_filter}")
                             ok = False
                     if ok:
                         tmp_levels.append(level_str)
@@ -478,10 +399,12 @@ class Trainer:
             else:
                 pass
 
+            print(f"Filtered by features: {len(filtered_levels)}")
+
             # K-meansで選択
             if self.config.bootstrap_kmeans_filter and len(filtered_levels) > 1:
                 result_levels = kmeans_select(
-                    filtered_levels, self.config, self.env)
+                    filtered_levels, self.config, self.game)
             else:
                 result_levels = filtered_levels
         else:
@@ -496,24 +419,13 @@ class Trainer:
             # generatedフォルダにも追加
             if isinstance(self.config, DataExtendConfig):
                 with open(
-                    os.path.join(self.config.level_data_path, "generated", f"{self.config.env_name}_{self.data_index}"), mode="w"
+                    os.path.join(self.config.level_data_path, "generated", f"{self.config.env_name}_{self.augmented_data_index}"), mode="w"
                 ) as f:
                     f.write(level)
-                    self.data_index += 1
-        wandb.log({"Dataset Size": len(self.dataset_files)})
-        # update dataloader
-        # Dataset
-        del self.train_loader
-        train_dataset = LevelDataset(
-            self.config.level_data_path,
-            self.env,
-            datamode=self.config.dataset_type,
-            transform=None,
-            latent_size=self.config.latent_size,
-        )
-        self.train_loader = DataLoader(
-            train_dataset, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
-        )
+                    self.augmented_data_index += 1
+        wandb.log({"Dataset Size": len(self.dataset_files)}, self.step)
+        # Update dataset
+        self.dataset.update()
         return selected
 
     def _level_add(self, level_str):
@@ -521,12 +433,11 @@ class Trainer:
         file = f'{self.config.env_name}_{index}'
         self.dataset_files.append(file)
         with open(
-            os.path.join(self.config.level_data_path,
-                         self.config.dataset_type, file),
+            os.path.join(self.config.level_data_path, file),
             "w",
         ) as f:
             f.write(level_str)
-            property = get_property(level_str, self.config.env_fullname)
+            property = self.game.get_property(level_str)
             for i, pd in enumerate(self.dataset_properties_dicts):
                 if property[i] in pd:
                     pd[property[i]] += 1
@@ -614,8 +525,8 @@ class Trainer:
         res_level, res_duplicate, n_level = 0, 0, 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
-                sim = check_level_similarity(
-                    level_strs[i], level_strs[j], self.config.env_fullname)
+                sim = self.game.check_similarity(
+                    level_strs[i], level_strs[j])
                 res_level += sim
                 res_duplicate += (
                     1
@@ -628,46 +539,16 @@ class Trainer:
             res_duplicate / n_level,
         )
 
-    # def _level_expand(self, level_str):
-    #     index = np.random.randint(0, len(self.dataset_files))
-    #     file = self.dataset_files[index]
-    #     with open(
-    #         os.path.join(self.config.level_data_path,
-    #                      self.config.env_name, self.config.dataset_type, file),
-    #         "w",
-    #     ) as f:
-    #         f.write(level_str)
-
-    def _get_labels(self, n_labels):
-        labels = []
-        for i in range(n_labels):
-            file = self.dataset_files[np.random.randint(
-                len(self.dataset_files))]
-            with open(os.path.join(self.config.level_data_path, self.config.dataset_type, file), "r") as f:
-                datalist = f.readlines()
-            # label : onehot vector of counts of map tile object.
-            label = np.zeros(len(self.env.ascii))
-            for i, s in enumerate(datalist):
-                for j, c in enumerate(s):
-                    if c == "\n":
-                        break
-                    label[self.env.ascii.index(c)] += 1
-            labels.append(label)
-        return torch.tensor(np.array(labels)).float().to(self.device)
-
     def _evaluation(self):
         playable_levels = []
         while True:
-            latents_for_eval = torch.randn(
-                5000,
-                self.config.latent_size,
-            ).to(self.device)
-            labels_for_eval = self._get_labels(5000)
+            latents_for_eval, _, labels_for_eval = self.dataset.sample(5000)
+            latents_for_eval, labels_for_eval = latents_for_eval.to(
+                self.device).float(), labels_for_eval.to(self.device).int()
             output_levels = self.generator(latents_for_eval, labels_for_eval)
-            level_strs = tensor_to_level_str(
-                self.config.env_name, output_levels)
+            level_strs = self.game.level_tensor_to_strs(output_levels)
             for level_str in level_strs:
-                if check_playable(level_str, self.config.env_fullname):
+                if self.game.check_playable(level_str):
                     playable_levels.append(level_str)
                     if len(playable_levels) == self.config.final_evaluation_levels:
                         break
@@ -676,18 +557,17 @@ class Trainer:
                 break
 
         playable_levels = []
-        latents_for_eval = torch.randn(
-            self.config.final_evaluation_levels,
-            self.config.latent_size,
-        ).to(self.device)
-        labels_for_eval = self._get_labels(self.config.final_evaluation_levels)
+        latents_for_eval, _, labels_for_eval = self.dataset.sample(
+            self.config.final_evaluation_levels)
+        latents_for_eval, labels_for_eval = latents_for_eval.to(
+            self.device).float(), labels_for_eval.to(self.device).int()
         output_levels = self.generator(latents_for_eval, labels_for_eval)
-        level_strs = tensor_to_level_str(self.config.env_name, output_levels)
+        level_strs = self.game.level_tensor_to_strs(output_levels)
         for level_str in level_strs:
-            if check_playable(level_str, self.config.env_fullname):
+            if self.game.check_playable(level_str):
                 playable_levels.append(level_str)
 
-        metrics = evaluation(playable_levels, self.config.env_fullname)
+        metrics = self.game.evaluation(playable_levels)
         metrics["Final Playable Ratio"] = len(
             playable_levels) / self.config.final_evaluation_levels
         print("Playable Ratio:", len(playable_levels) /
@@ -697,13 +577,14 @@ class Trainer:
     def _init_dataset_properties(self):
         ret = []
         image_paths = [
-            os.path.join(self.train_loader.dataset.image_dir, name) for name in os.listdir(self.train_loader.dataset.image_dir)
+            os.path.join(self.dataset.level_dir, name) for name in os.listdir(self.dataset.level_dir)
         ]
         for path in image_paths:
             level_str = ''
             with open(path, mode='r') as f:
                 level_str = f.read()
-            property = get_property(level_str, self.config.env_fullname)
+            property = self.game.get_property(level_str)
+            # ret[property] += 1
             for i, p in enumerate(property):
                 if i >= len(ret):
                     ret.append({})

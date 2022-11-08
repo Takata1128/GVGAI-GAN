@@ -1,11 +1,11 @@
 import os
 import gym_gvgai
 from PIL import Image, ImageDraw, ImageFont
-from .env import Env
+from .game.env import Game
 
 
 class MarioLevelVisualizer:
-    def __init__(self, env: Env, dir: str, tile_size=16, padding=2):
+    def __init__(self, env: Game, dir: str, tile_size=16, padding=2):
         self.game = env
         self.tile_size = tile_size
         self.pad = padding
@@ -46,7 +46,7 @@ class MarioLevelVisualizer:
 
 
 class GVGAILevelVisualizer:
-    def __init__(self, env: Env, tile_size=16, padding=2):
+    def __init__(self, env: Game, tile_size=16, padding=2):
         self.game = env
         self.tile_size = tile_size
         self.dir = gym_gvgai.dir

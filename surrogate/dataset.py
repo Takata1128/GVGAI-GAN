@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 import torch
 import numpy as np
-from gan.env import Env
+from gan.game.env import Game
 from gan.utils import check_playable_zelda
 
 
@@ -12,7 +12,7 @@ class SurrogateModelDataset(Dataset):
     def __init__(
         self,
         root,
-        env: Env,
+        env: Game,
         datamode="train",
         transform=transforms.ToTensor(),
     ):
@@ -43,7 +43,7 @@ class SurrogateModelDataset(Dataset):
             level_str_list = f.readlines()
         ret = np.zeros(
             (len(self.env.ascii),
-             self.env.state_shape[1], self.env.state_shape[2]),
+             self.env.input_shape[1], self.env.input_shape[2]),
         )
         for i, s in enumerate(level_str_list):
             for j, c in enumerate(s):

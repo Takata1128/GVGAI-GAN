@@ -1,6 +1,7 @@
 import argparse
 from ensurepip import bootstrap
 from gan.config import SmallModelConfig, DataExtendConfig
+from gan.game.zelda import Zelda
 from gan.trainer import Trainer
 from gan.level_dataset_extend import prepare_dataset
 
@@ -66,41 +67,54 @@ if __name__ == "__main__":
     # trainer = Trainer(config)
     # trainer.train()
 
-    for i in range(5):
-        # baseline
-        config = SmallModelConfig()
-        config.seed = i
-        # config.bootstrap_property_filter = 0.30
-        config.set_env()
-        config.dataset_type = 'train'
-        config.dataset_size = 35
-        config.bootstrap_epoch = 1
-        config.div_loss = None
-        config.bootstrap_hamming_filter = None
-        if config.dataset_type == "train":
-            prepare_dataset(
-                seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-            )
-        trainer = Trainer(config)
-        trainer.train()
+    # for i in range(5):
+    #     # baseline
+    #     game = Zelda('zelda', 'v1')
+    #     config = SmallModelConfig()
+    #     config.seed = i
+    #     config.set_env()
+    #     config.bootstrap_epoch = 5
+    #     config.div_loss = None
+    #     config.bootstrap_hamming_filter = None
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data)
+    #     trainer = Trainer(game, config)
+    #     trainer.train()
 
     for i in range(5):
-        # baseline
+        # ours
+        game = Zelda('zelda', 'v1')
         config = SmallModelConfig()
         config.seed = i
-        config.bootstrap_property_filter = 0.30
         config.set_env()
-        config.dataset_type = 'train'
-        config.dataset_size = 35
         config.bootstrap_epoch = 1
-        # config.div_loss = None
-        # config.bootstrap_hamming_filter = None
+        config.bootstrap_hamming_filter = 0.90
+        config.bootstrap_property_filter = 0.30
         if config.dataset_type == "train":
             prepare_dataset(
-                seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-            )
-        trainer = Trainer(config)
+                game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data)
+        trainer = Trainer(game, config)
         trainer.train()
+
+    # for i in range(5):
+    #     # baseline
+    #     game = Zelda('zelda', 'v1')
+    #     config = SmallModelConfig()
+    #     config.seed = i
+    #     config.bootstrap_property_filter = 0.30
+    #     config.set_env()
+    #     config.dataset_type = 'train'
+    #     config.dataset_size = 35
+    #     config.bootstrap_epoch = 1
+    #     # config.div_loss = None
+    #     # config.bootstrap_hamming_filter = None
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data
+    #         )
+    #     trainer = Trainer(game, config)
+    #     trainer.train()
 
     # only bootstrap
     # config = SmallModelConfig()

@@ -3,7 +3,7 @@ import torch
 import wandb
 import sys
 sys.path.append('../')
-from gan.env import Env
+from gan.game.env import Game
 from torch.utils.data import DataLoader
 from surrogate.model import SurrogateModel
 from surrogate.dataset import SurrogateModelDataset
@@ -34,7 +34,7 @@ def main(surrogate_config: SurrogateModelTrainingConfig, model_config: SmallMode
         device = torch.device("cpu")
         print("device : cpu")
 
-    env = Env(model_config.env_name, model_config.env_version)
+    env = Game(model_config.env_name, model_config.env_version)
 
     generator = Generator(
         out_ch=model_config.input_shape[0],

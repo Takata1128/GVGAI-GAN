@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from collections import deque
-from .env import GameDescription, Env
+from .game.env import GameDescription, Game
 from .config import BaseConfig
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
@@ -273,7 +273,7 @@ def evaluation_rogue(playable_levels: list[str]):
     return metrics
 
 
-def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: Env):
+def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: Game):
     def level_str_to_features(level_str):
         level_str = level_str.split()
         ret = np.zeros((len(level_str), len(level_str[0])))
@@ -306,7 +306,9 @@ def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: En
     levels_reduced = pca.fit_transform(playable_levels_numpy)
 
     # k-means with elbow
-    kmeans = KMeans(n_clusters=elbow(levels_reduced), random_state=0)
+    n_clusters = elbow(levels_reduced)
+    print(f'n_clusters = {n_clusters}')
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0)
     kmeans.fit(levels_reduced)
     indices = []
 
