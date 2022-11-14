@@ -99,7 +99,7 @@ class Generator(nn.Module):
     ):
         super(Generator, self).__init__()
         self.z_size = z_shape[0]
-        self.init_filters = filters*4
+        self.init_filters = filters * 4
         self.output_shape = shapes[-1]
 
         self.preprocess = nn.Linear(
@@ -110,12 +110,29 @@ class Generator(nn.Module):
         #     nn.BatchNorm2d(filters*4),
         #     nn.ReLU(True)
         # )
-        self.conv0 = nn.ConvTranspose2d(out_dim, filters*4, 1, 1, 0)
-        self.bn0 = nn.BatchNorm2d(filters*4)
-        self.attn = Self_Attn(filters*4)
-        self.conv1 = nn.ConvTranspose2d(filters*4, filters, 1, 1, 0)
-        self.bn1 = nn.BatchNorm2d(filters)
-        self.output = nn.ConvTranspose2d(filters, out_dim, 1, 1, 0)
+        self.main = nn.Sequential(
+            nn.ConvTranspose2d(out_dim, filters * 4, 1, 1, 0),
+            nn.BatchNorm2d(filters * 4),
+            nn.ReLU(),
+            Self_Attn(filters * 4),
+            nn.ConvTranspose2d(filters * 4, filters * 2, 1, 1, 0),
+            nn.BatchNorm2d(filters * 2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(filters * 2, filters, 1, 1, 0),
+            nn.BatchNorm2d(filters),
+            nn.ReLU(),
+            # Self_Attn(filters),
+            nn.ConvTranspose2d(filters, out_dim, 1, 1, 0),
+            nn.BatchNorm2d(out_dim),
+            Self_Attn(out_dim),
+        )
+
+        # self.conv0 = nn.ConvTranspose2d(out_dim, filters * 4, 1, 1, 0)
+        # self.bn0 = nn.BatchNorm2d(filters * 4)
+        # self.attn = Self_Attn(filters * 4)
+        # self.conv1 = nn.ConvTranspose2d(filters * 4, filters, 1, 1, 0)
+        # self.bn1 = nn.BatchNorm2d(filters)
+        # self.output = nn.ConvTranspose2d(filters, out_dim, 1, 1, 0)
 
         self.act = nn.ReLU(True)
 
@@ -123,14 +140,15 @@ class Generator(nn.Module):
         # z = z.view(-1, self.z_size, 1, 1)
         x = self.preprocess(z)
         x = x.view(-1, 8, *self.output_shape)  # linear
-        x = self.act(self.bn0(self.conv0(x)))
-        x = self.attn(x)
-        x = self.act(self.bn1(self.conv1(x)))
-        x = self.output(x)
+        # x = self.act(self.bn0(self.conv0(x)))
+        # x = self.attn(x)
+        # x = self.act(self.bn1(self.conv1(x)))
+        # x = self.output(x)
+        x = self.main(x)
         return x
 
-    def summary(self, batch_size=64):
-        summary(self, (batch_size, self.z_size))
+    def summary(self, batch_size=64, device=None):
+        summary(self, (batch_size, self.z_size), device=device)
 
 
 class Discriminator(nn.Module):
@@ -144,23 +162,37 @@ class Discriminator(nn.Module):
         self.input_ch = in_ch
         self.input_shape = shapes[0]
 
-        self.conv1 = nn.Conv2d(in_ch, filters, 1, 1, 0)
-        self.attn = Self_Attn(filters)
-        self.conv2 = nn.Conv2d(filters, filters*2, 1, 1, 0)
-        self.act = nn.LeakyReLU()
+        self.main = nn.Sequential(
+            Self_Attn(in_ch),
+            nn.Conv2d(in_ch, filters, 1, 1, 0),
+            nn.LeakyReLU(),
+            nn.Conv2d(filters, filters * 2, 1, 1, 0),
+            nn.LeakyReLU(),
+            Self_Attn(filters * 2),
+            nn.Conv2d(filters * 2, filters * 4, 1, 1, 0),
+            nn.LeakyReLU(),
+            nn.AdaptiveAvgPool2d(1),
+        )
+
+        # self.conv1 = nn.Conv2d(in_ch, filters, 1, 1, 0)
+        # self.attn = Self_Attn(filters)
+        # self.conv2 = nn.Conv2d(filters, filters * 2, 1, 1, 0)
+        # self.act = nn.LeakyReLU()
         # self.pool = nn.AdaptiveAvgPool2d(1)
-        self.pool = nn.Conv2d(filters*2, filters*2,
-                              shapes[0][0], shapes[0][1])
-        self.output = nn.Linear(filters*2, 1)
+        # # self.pool = nn.Conv2d(filters * 2, filters * 2,
+        # #                       shapes[0][0], shapes[0][1])
+        self.output = nn.Linear(filters * 4, 1)
 
     def forward(self, x, label=None):
-        x = self.act(self.conv1(x))
-        x = self.attn(x)
-        x = self.act(self.conv2(x))
-        x = self.pool(x)
+        # x = self.act(self.conv1(x))
+        # x = self.attn(x)
+        # x = self.act(self.conv2(x))
+        # x = self.pool(x)
+        x = self.main(x)
         x = x.view(x.size(0), -1)
         out = self.output(x)
         return out
 
-    def summary(self, batch_size=64):
-        summary(self, (batch_size, self.input_ch, *self.input_shape))
+    def summary(self, batch_size=64, device=None):
+        summary(self, (batch_size, self.input_ch,
+                *self.input_shape), device=device)

@@ -96,7 +96,7 @@ class DataExtendConfig(BaseConfig):
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "none"  # ["l1","l2","none"]
+    div_loss: str = "l1"  # ["l1","l2","none"]
     lambda_div: float = 50.0
     div_loss_threshold_playability: float = 0.0
 
@@ -125,7 +125,7 @@ class DataExtendConfig(BaseConfig):
     reset_weight_bootstrap_count: int = 50
     reset_weight_interval: int = 2500 * train_batch_size
     reset_train_dataset_th: int = 200
-    stop_generate_count = 1000
+    stop_generate_count = 2000
 
 
 @dataclass
@@ -136,7 +136,7 @@ class SmallModelConfig(BaseConfig):
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 128
     discriminator_filters: int = 128
-    model_type: str = "small"  # "normal","simple","branch","small"
+    model_type: str = "sa"  # "normal","simple","branch","small"
     use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
     use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_linear4z2features_g: bool = False
