@@ -12,28 +12,39 @@ from .game.env import Game
 
 @dataclass
 class LevelItem:
+    data: torch.Tensor
+    label: torch.Tensor
     representation: str
     features: tuple
 
 
 class LevelDataset(Dataset):
-    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32):
+    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32, use_diversity_sampling=False):
         self.game = game
         self.level_dir = dataset_dir
-        self.level_paths = [os.path.join(
-            self.level_dir, name) for name in os.listdir(self.level_dir)]
-        self.data_length = len(self.level_paths)
         self.latent_size = latent_size
-        self.data: list[LevelItem] = []
-        self.data_index = 0
+        self.use_diversity_sampling = use_diversity_sampling
         self.initialize()
 
     def initialize(self):
+        self.data: list[LevelItem] = []
+        self.feature2indices = {}
+        self.data_index = 0
+        self.level_paths = [os.path.join(
+            self.level_dir, name) for name in os.listdir(self.level_dir)]
+        self.data_length = len(self.level_paths)
         for path in self.level_paths:
             with open(path, 'r') as f:
                 level = f.read()
             features = self.game.get_property(level)
-            self.data.append(LevelItem(level, features))
+            level_tensor, label_tensor = self.to_tensor(level)
+            item = LevelItem(level_tensor, label_tensor, level, features)
+            self.feature2indices[features] = [len(self.data)]
+            self.data.append(item)
+
+        print('### Properties ###')
+        for key, value in self.feature2indices.items():
+            print(f'{key} : {len(value)}')
 
     def update(self):
         '''
@@ -48,7 +59,13 @@ class LevelDataset(Dataset):
             with open(path, 'r') as f:
                 level = f.read()
             features = self.game.get_property(level)
-            self.data.append(LevelItem(level, features))
+            level_tensor, label_tensor = self.to_tensor(level)
+            item = LevelItem(level_tensor, label_tensor, level, features)
+            if features in self.feature2indices:
+                self.feature2indices[features].append(index)
+            else:
+                self.feature2indices[features] = [index]
+            self.data.append(item)
 
         self.data_length = len(self.level_paths)
 
@@ -57,11 +74,16 @@ class LevelDataset(Dataset):
         level_batch = torch.zeros((batch_size, *self.game.input_shape))
         label_batch = torch.zeros((batch_size, self.game.input_shape[0]))
         for index in range(batch_size):
-            item = np.random.choice(self.data)
-            level_tensor, label_tensor = self.to_tensor(item.representation)
+            if self.use_diversity_sampling:
+                key_index = np.random.choice(len(self.feature2indices))
+                idx = np.random.choice(self.feature2indices[list(
+                    self.feature2indices.keys())[key_index]])
+                item = self.data[idx]
+            else:
+                item = np.random.choice(self.data)
             latent_batch[index] = torch.randn(self.latent_size)
-            level_batch[index] = level_tensor
-            label_batch[index] = label_tensor
+            level_batch[index] = item.data
+            label_batch[index] = item.label
         return latent_batch, level_batch, label_batch
 
     def to_tensor(self, level: str):

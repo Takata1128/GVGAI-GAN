@@ -5,11 +5,11 @@ from .game.env import Game
 
 
 class MarioLevelVisualizer:
-    def __init__(self, env: Game, dir: str, tile_size=16, padding=2):
+    def __init__(self, env: Game, sprites_dir: str, tile_size=16, padding=2):
         self.game = env
         self.tile_size = tile_size
         self.pad = padding
-        self.dir = dir
+        self.dir = sprites_dir
         self.char_to_img = self._load_sprites()
 
     def _load_sprites(self):

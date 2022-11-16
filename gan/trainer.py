@@ -2,6 +2,7 @@ from __future__ import annotations
 import wandb
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
+import torchvision.transforms as transforms
 import os
 import torch
 import numpy as np
@@ -54,8 +55,7 @@ class Trainer:
         self.dataset_properties_dicts = self._init_dataset_properties()
 
         if isinstance(self.config, DataExtendConfig):
-            generated_levels_path = os.path.join(self.config.level_data_path,
-                                                 f'{self.game_name}_{self.game.version}', "generated",)
+            generated_levels_path = self.config.generated_data_path
             if os.path.exists(generated_levels_path):
                 shutil.rmtree(generated_levels_path)
             os.makedirs(generated_levels_path)
@@ -63,7 +63,7 @@ class Trainer:
         # Level Visualizer
         if self.game.name == 'mario':
             self.level_visualizer = MarioLevelVisualizer(
-                self.game, self.config.level_data_path)
+                self.game, sprites_dir=self.config.data_path)
         else:
             self.level_visualizer = GVGAILevelVisualizer(self.game)
 
@@ -178,7 +178,8 @@ class Trainer:
                 if self.config.use_recon_loss:
                     metrics["Reconstruction Loss"] = recon_loss
                 wandb.log(metrics, step=self.step)
-                self.after_step()
+                if not self.after_step():
+                    break
             self._evaluation()
             self._save_models(self.model_save_path, None, None)
 
@@ -190,7 +191,7 @@ class Trainer:
                 # if self.config.use_recon_loss:
                 #     self._save_recon_images(real, label)
 
-            if self.step % self.eval_epoch == 0 or self.step % self.bootstrap_epoch == 0:
+            if self.step % self.eval_epoch == 0 or (self.config.bootstrap and self.step % self.bootstrap_epoch == 0):
                 # generate levels
                 latents, _, labels = self.dataset.sample(
                     self.config.eval_playable_counts)
@@ -243,11 +244,11 @@ class Trainer:
                         prepare_dataset(
                             self.game, seed=self.config.seed, extend_data=self.config.clone_data, flip=self.config.flip_data
                         )
-                        # Update dataset
-                        self.dataset.update()
+                        # initialize dataset
+                        self.dataset.initialize()
 
                     # 一定期間たったらモデルを強制リセット
-                    if self.step - self.last_reset_steps >= 3000:
+                    if self.step - self.last_reset_steps >= self.config.reset_weight_epoch:
                         print(
                             f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
                         self._build_model()
@@ -257,7 +258,8 @@ class Trainer:
                     if self.augmented_data_index >= self.config.stop_generate_count:
                         print(
                             f"Generated size exceeds {self.augmented_data_index}, so stop generation.")
-                        # break
+                        return False
+        return True
 
     def _generate_levels(self, latents, labels):
         p_level = torch.softmax(
@@ -271,7 +273,7 @@ class Trainer:
         level_strs = self.game.level_tensor_to_strs(
             p_level[:, :, :self.game.map_shape[0], :self.game.map_shape[1]])
         p_level_img = [
-            torch.Tensor(
+            torch.tensor(
                 np.array(self.level_visualizer.draw_level(lvl)).transpose(
                     2, 0, 1
                 )
@@ -279,10 +281,12 @@ class Trainer:
             )
             for lvl in level_strs
         ]
-        grid_level_img = make_grid(
+        grid_level_torch_img = make_grid(
             p_level_img, nrow=3, padding=0)
+        grid_level_pil_img = transforms.functional.to_pil_image(
+            grid_level_torch_img)
         images = wandb.Image(
-            grid_level_img, caption="generated levels")
+            grid_level_pil_img, caption="generated levels")
         wandb.log({"Generated Levels": images}, self.step)
 
     def _save_recon_images(self, real, label):
@@ -311,10 +315,10 @@ class Trainer:
             )
             for lvl in recon_level_strs
         ]
-        real_level_img = make_grid(
-            real_level_img, nrow=3, padding=0)
-        recon_level_img = make_grid(
-            recon_level_img, nrow=3, padding=0)
+        real_level_img = transforms.functional.to_pil_image(make_grid(
+            real_level_img, nrow=3, padding=0))
+        recon_level_img = transforms.functional.to_pil_image(make_grid(
+            recon_level_img, nrow=3, padding=0))
         images = wandb.Image(
             real_level_img, caption="real levels")
         wandb.log({"Real Levels": images}, self.step)
@@ -352,10 +356,9 @@ class Trainer:
             else:
                 # データセットのレベルたち
                 dataset_levels = []
-                for file in self.dataset_files:
-                    with open(os.path.join(self.config.level_data_path, file), mode='r') as f:
-                        s = f.read()
-                        dataset_levels.append(s)
+                for item in self.dataset.data:
+                    dataset_levels.append(item.representation)
+
                 filtered_levels = []
                 for generated_level in unique_playable_levels:
                     dup = False
@@ -372,32 +375,26 @@ class Trainer:
 
             # プロパティフィルタ
             if self.config.bootstrap_property_filter is not None:
-                # min_values = []
-                # for i, pd in enumerate(self.dataset_properties_dicts):
-                #     min_v = 1e9
-                #     for key, values in pd.items():
-                #         min_v = min(min_v, values)
-                #     min_values.append(min_v)
-
                 tmp_levels = []
                 for level_str in filtered_levels:
-                    property = self.game.get_property(level_str)
+                    features = self.game.get_property(level_str)
                     ok = True
                     for i, pd in enumerate(self.dataset_properties_dicts):
-                        if (property[i] in pd) and (pd[property[i]] >= self.dataset.data_length * self.config.bootstrap_property_filter):
+                        if (features[i] in pd) and (pd[features[i]] >= self.dataset.data_length * self.config.bootstrap_property_filter):
                             print(
-                                f"{pd[property[i]]} >= {self.dataset.data_length * self.config.bootstrap_property_filter}")
+                                f"{pd[features[i]]} >= {self.dataset.data_length * self.config.bootstrap_property_filter}")
                             ok = False
                     if ok:
                         tmp_levels.append(level_str)
 
                 filtered_levels = tmp_levels
-                print("Property : ")
-                for property, count in self.dataset_properties_dicts[0].items():
-                    print(f"{property}={count} , ", end="")
-                print()
             else:
                 pass
+
+            print("Property : ")
+            for feature, v in self.dataset.feature2indices.items():
+                print(f"{feature}={len(v)} , ", end="")
+            print()
 
             print(f"Filtered by features: {len(filtered_levels)}")
 
@@ -419,7 +416,7 @@ class Trainer:
             # generatedフォルダにも追加
             if isinstance(self.config, DataExtendConfig):
                 with open(
-                    os.path.join(self.config.level_data_path, "generated", f"{self.config.env_name}_{self.augmented_data_index}"), mode="w"
+                    os.path.join(self.config.generated_data_path, f"{self.config.env_name}_{self.augmented_data_index}"), mode="w"
                 ) as f:
                     f.write(level)
                     self.augmented_data_index += 1

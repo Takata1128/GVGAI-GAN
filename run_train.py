@@ -1,7 +1,7 @@
 import argparse
-from ensurepip import bootstrap
 from gan.config import SmallModelConfig, DataExtendConfig
 from gan.game.zelda import Zelda
+from gan.game.mario import Mario
 from gan.trainer import Trainer
 from gan.level_dataset_extend import prepare_dataset
 
@@ -51,21 +51,26 @@ if __name__ == "__main__":
     # trainer = Trainer(config)
     # trainer.train()
 
-    # config = SmallModelConfig()
-    # config.env_name = "mario"
-    # config.env_version = 'v0'
-    # config.set_env()
-    # config.dataset_size = 174
-    # if config.dataset_type == "train":
-    #     prepare_dataset(
-    #         seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-    #     )
-    # config.use_self_attention_g = []
-    # config.use_self_attention_d = []
-    # config.bootstrap = None
-    # config.div_loss = None
-    # trainer = Trainer(config)
-    # trainer.train()
+    config = SmallModelConfig()
+    config.env_name = "mario"
+    config.env_version = 'v0'
+    game = Mario(config.env_name, config.env_version)
+    config.set_env()
+    config.dataset_size = 174
+    if config.dataset_type == "train":
+        prepare_dataset(
+            game=game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data
+        )
+    config.use_self_attention_g = []
+    config.use_self_attention_d = []
+    config.generator_filters = 64
+    config.discriminator_filters = 64
+    config.use_deconv_g = True
+    config.bootstrap = None
+    config.div_loss = None
+    # config.use_recon_loss = True
+    trainer = Trainer(game, config)
+    trainer.train()
 
     # for i in range(5):
     #     # baseline
@@ -82,20 +87,48 @@ if __name__ == "__main__":
     #     trainer = Trainer(game, config)
     #     trainer.train()
 
-    for i in range(5):
-        # ours
-        game = Zelda('zelda', 'v1')
-        config = SmallModelConfig()
-        config.seed = i
-        config.set_env()
-        config.bootstrap_epoch = 1
-        config.bootstrap_hamming_filter = 0.90
-        config.bootstrap_property_filter = 0.30
-        if config.dataset_type == "train":
-            prepare_dataset(
-                game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data)
-        trainer = Trainer(game, config)
-        trainer.train()
+    # for i in range(1):
+    #     # ours
+    #     game = Zelda('zelda', 'v1')
+    #     config = DataExtendConfig()
+    #     config.seed = 114514
+    #     config.set_env()
+    #     config.bootstrap_epoch = 1
+    #     config.bootstrap_hamming_filter = 0.90
+    #     config.bootstrap_property_filter = None
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data)
+    #     trainer = Trainer(game, config)
+    #     trainer.train()
+
+    #     game = Zelda('zelda', 'v1')
+    #     config = SmallModelConfig()
+    #     config.seed = i
+    #     config.set_env()
+    #     config.dataset_type = 'generated'
+    #     config.bootstrap = None
+    #     config.div_loss = None
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data)
+    #     trainer = Trainer(game, config)
+    #     trainer.train()
+
+    # for i in range(1):
+    #     # ours
+    #     game = Zelda('zelda', 'v1')
+    #     config = SmallModelConfig()
+    #     config.seed = i
+    #     config.set_env()
+    #     config.bootstrap_epoch = 1
+    #     config.bootstrap_hamming_filter = 0.90
+    #     config.bootstrap_property_filter = None
+    #     if config.dataset_type == "train":
+    #         prepare_dataset(
+    #             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data)
+    #     trainer = Trainer(game, config)
+    #     trainer.train()
 
     # for i in range(5):
     #     # baseline

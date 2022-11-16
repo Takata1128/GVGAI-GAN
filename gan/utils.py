@@ -307,7 +307,7 @@ def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: Ga
 
     # k-means with elbow
     n_clusters = elbow(levels_reduced)
-    print(f'n_clusters = {n_clusters}')
+    # print(f'n_clusters = {n_clusters}')
     kmeans = KMeans(n_clusters=n_clusters, random_state=0)
     kmeans.fit(levels_reduced)
     indices = []
