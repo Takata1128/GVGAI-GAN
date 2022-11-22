@@ -136,7 +136,7 @@ class SmallModelConfig(BaseConfig):
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 128
     discriminator_filters: int = 128
-    model_type: str = "sa"  # "normal","simple","branch","small"
+    model_type: str = "small"  # "normal","simple","branch","small"
     use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
     use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_linear4z2features_g: bool = False
@@ -167,7 +167,7 @@ class SmallModelConfig(BaseConfig):
     save_image_epoch: int = 100
     save_model_epoch: int = 1000
     eval_epoch: int = 100
-    bootstrap_epoch: int = 1
+    bootstrap_epoch: int = 10
 
     # save_image_interval: int = 100 * train_batch_size  # save images interval
     # save_model_interval: int = 1000 * train_batch_size  # save models interval

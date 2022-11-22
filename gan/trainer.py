@@ -203,7 +203,7 @@ class Trainer:
     def train(self):
         wandb.login()
         metrics = {}
-        with wandb.init(project=f"{self.config.env_name} Level GAN by {self.config.model_type} model", config=self.config.__dict__, name=self.config.name):
+        with wandb.init(project=f"{self.config.env_name} Level GAN by {self.config.model_type} model", config=self.config.__dict__):
             # check model summary
             self.generator.summary(
                 batch_size=self.config.train_batch_size, device=self.device)

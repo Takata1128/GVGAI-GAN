@@ -83,21 +83,21 @@ if __name__ == "__main__":
     #     trainer = Trainer(config)
     #     trainer.train()
 
-    # for i in range(1):
-    #     # ours
-    #     config = SmallModelConfig()
-    #     config.seed = i
-    #     config.bootstrap_property_filter = None
-    #     config.set_env()
-    #     config.dataset_type = 'train'
-    #     config.dataset_size = 35
-    #     config.bootstrap_epoch = 1
-    #     if config.dataset_type == "train":
-    #         prepare_dataset(
-    #             seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-    #         )
-    #     trainer = Trainer(config)
-    #     trainer.train()
+    for i in range(1):
+        # ours
+        config = SmallModelConfig()
+        config.seed = i
+        config.bootstrap_property_filter = None
+        config.set_env()
+        config.dataset_type = 'train'
+        config.dataset_size = 35
+        config.bootstrap_epoch = 10
+        if config.dataset_type == "train":
+            prepare_dataset(
+                seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+            )
+        trainer = Trainer(config)
+        trainer.train()
 
     for i in range(1):
         # ours2
