@@ -50,8 +50,8 @@ def recon_loss(recon: torch.Tensor, real: torch.Tensor):
 def d_loss_hinge(real_logits: torch.Tensor, fake_logits: torch.Tensor):
     loss_real = torch.relu(1.0 - real_logits).mean()
     loss_fake = torch.relu(1.0 + fake_logits).mean()
-    D_x = torch.sigmoid(real_logits).mean().item()
-    D_G_z = torch.sigmoid(fake_logits).mean().item()
+    D_x = real_logits.mean().item()
+    D_G_z = fake_logits.mean().item()
     return loss_real, loss_fake, D_x, D_G_z
 
 

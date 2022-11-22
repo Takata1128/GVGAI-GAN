@@ -52,7 +52,7 @@ class BaseConfig:
     # others parameters
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
-    gpu_id: int = 5  # gpu index
+    gpu_id: int = 4  # gpu index
     eval_playable_counts: int = 300  # number of z to check playable.
     clone_data: bool = False
     flip_data: bool = False
