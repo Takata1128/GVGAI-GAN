@@ -56,6 +56,7 @@ class Mario(Game):
             return hit
 
         levels_small_set = playable_levels[:1000]
+        total_hamming_dist, dup90, n = 0, 0, 0
         for i in range(len(levels_small_set)):
             for j in range(len(levels_small_set)):
                 if i < j:

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-def d_loss(real_logits: torch.Tensor, fake_logits: torch.Tensor, smooth_label_value: float = 0.0):
+def d_loss(real_logits: torch.Tensor, fake_logits: torch.Tensor, smooth_label_value: float = 0.2):
     # loss from real images
     p_real = torch.sigmoid(real_logits)
     real_labels = torch.full_like(real_logits, fill_value=smooth_label_value)
@@ -50,11 +50,37 @@ def recon_loss(recon: torch.Tensor, real: torch.Tensor):
 def d_loss_hinge(real_logits: torch.Tensor, fake_logits: torch.Tensor):
     loss_real = torch.relu(1.0 - real_logits).mean()
     loss_fake = torch.relu(1.0 + fake_logits).mean()
-    D_x = torch.sigmoid(real_logits).mean().item()
-    D_G_z = torch.sigmoid(fake_logits).mean().item()
+    D_x = real_logits.mean().item()
+    D_G_z = fake_logits.mean().item()
     return loss_real, loss_fake, D_x, D_G_z
 
 
 def g_loss_hinge(fake_logits: torch.Tensor):
-    discriminator_loss = -torch.mean(fake_logits)
-    return discriminator_loss
+    generator_loss = -torch.mean(fake_logits)
+    return generator_loss
+
+
+def d_loss_wgan(real_logits: torch.Tensor, fake_logits: torch.Tensor):
+    loss_real = -torch.mean(real_logits)
+    loss_fake = torch.mean(fake_logits)
+    D_x = real_logits.mean().item()
+    D_G_z = fake_logits.mean().item()
+    return loss_real, loss_fake, D_x, D_G_z
+
+
+def g_loss_wgan(fake_logits: torch.Tensor):
+    generator_loss = -torch.mean(fake_logits)
+    return generator_loss
+
+
+def d_loss_lsgan(real_logits: torch.Tensor, fake_logits: torch.Tensor):
+    loss_real = 0.5 * nn.MSELoss()(real_logits, torch.ones_like(real_logits) * (1.0))
+    loss_fake = 0.5 * nn.MSELoss()(fake_logits, torch.ones_like(fake_logits) * (-1.0))
+    D_x = real_logits.mean().item()
+    D_G_z = fake_logits.mean().item()
+    return loss_real, loss_fake, D_x, D_G_z
+
+
+def g_loss_lsgan(fake_logits: torch.Tensor):
+    generator_loss = nn.MSELoss()(fake_logits, torch.ones_like(fake_logits) * 0.0)
+    return generator_loss

@@ -12,7 +12,7 @@ class BaseConfig:
     env_name: str = "zelda"
     env_version: str = 'v1'
 
-    # model define
+    # model architecture
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 128
     discriminator_filters: int = 128
@@ -28,10 +28,19 @@ class BaseConfig:
     use_conditional: bool = False
 
     # learning parameters
+    discrimianator_update_count: int = 1
     adv_loss: str = "hinge"  # ["baseline","hinge"]
     div_loss: str = "l1"  # ["l1","l2","none"]
     lambda_div: float = 50.0
-    div_loss_threshold_playability: float = 0.0
+    use_recon_loss: bool = False
+    recon_lambda: float = 1.0
+    use_gradient_penalty: bool = False
+    gp_lambda: float = 1.0
+    generator_lr: float = 0.00005
+    discriminator_lr: float = 0.00005
+    train_batch_size: int = 32  # training batch size
+    steps: int = 10000 * (train_batch_size // 32)  # training steps
+    dataset_size: int = 100
 
     bootstrap: str = "smart"  # ["none", "random", "smart"]
     bootstrap_hamming_filter: float = 0.90
@@ -40,26 +49,10 @@ class BaseConfig:
     use_diversity_sampling: bool = False
     bootstrap_max_count: int = 1
 
-    train_batch_size: int = 32  # training batch size
-    steps: int = 10000 * (train_batch_size // 32)  # training steps
-
-    # save_image_interval: int = 200 * train_batch_size  # save images interval
-    # save_model_interval: int = 1000 * train_batch_size  # save models interval
-    # eval_playable_interval: int = 200 * train_batch_size  # check playable interval
-    # bootstrap_interval: int = 40 * train_batch_size  # bootstrap
-    dataset_size: int = 100
-
-    use_recon_loss: bool = False
-    recon_lambda: float = 1.0
-
-    generator_lr: float = 0.00005
-    discriminator_lr: float = 0.00005
-
     # others parameters
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
-    gpu_id: int = 4  # gpu index
-
+    gpu_id: int = 5  # gpu index
     eval_playable_counts: int = 300  # number of z to check playable.
     clone_data: bool = False
     flip_data: bool = False
@@ -81,9 +74,8 @@ class BaseConfig:
             os.path.dirname(__file__) + "/data/level/" +
             self.env_fullname + '/train/'
         )  # Training dataset path
-        # generated data path (only use in DataExtendConfig)
 
-        # generated level data path
+        # generated level data path (only use in DataExtendConfig)
         self.generated_data_path: str = (
             os.path.dirname(__file__) + "/data/level/" +
             self.env_fullname + '/generated/'
@@ -150,11 +142,11 @@ class SmallModelConfig(BaseConfig):
     use_conditional: bool = False
 
     # learning parameters
-    adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "l1"  # ["l1","l2","none"]
+    adv_loss: str = "hinge"
+    div_loss: str = "l1"
     lambda_div: float = 50.0
 
-    bootstrap: str = "smart"  # ["none", "random", "smart"]
+    bootstrap: str = "smart"
     bootstrap_hamming_filter: float = 0.90
     bootstrap_property_filter: float = None
     bootstrap_kmeans_filter: bool = True
@@ -167,7 +159,85 @@ class SmallModelConfig(BaseConfig):
     save_image_epoch: int = 100
     save_model_epoch: int = 1000
     eval_epoch: int = 100
-    bootstrap_epoch: int = 1
+    bootstrap_epoch: int = 10
+
+    use_recon_loss: bool = False
+    recon_lambda: float = 1.0
+
+    generator_lr: float = 0.00005
+    discriminator_lr: float = 0.00005
+
+
+@dataclass
+class MarioConfig(BaseConfig):
+    # training name
+    name: str = "mario"
+    # environment name
+    env_name: str = "mario"
+    env_version: str = 'v0'
+
+    generator_filters: int = 64
+    discrimianator_filters: int = 64
+
+    # learning parameters
+    adv_loss: str = "hinge"
+    div_loss: str = None
+
+    bootstrap: str = None
+
+    train_batch_size: int = 32  # training batch size
+    steps: int = 10000 * (train_batch_size // 32)  # training steps
+
+    save_image_epoch: int = 100
+    save_model_epoch: int = 1000
+    eval_epoch: int = 100
+    bootstrap_epoch: int = 100
+
+    use_recon_loss: bool = False
+    recon_lambda: float = 1.0
+
+    generator_lr: float = 0.0001
+    discriminator_lr: float = 0.0001
+
+
+@dataclass
+class ZeldaConfig(BaseConfig):
+    dataset_type: str = "train"  # [train, generated]
+
+    # model define
+    latent_size: int = 32  # latent dims for generation
+    generator_filters: int = 128
+    discriminator_filters: int = 128
+    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
+    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
+    use_linear4z2features_g: bool = False
+    use_deconv_g: bool = False
+    use_bn_d: bool = False
+    use_sn_d: bool = False
+    use_pooling_d: bool = False
+    use_minibatch_std: bool = False
+    use_spectral_norm: bool = False
+    use_conditional: bool = False
+
+    # learning parameters
+    adv_loss: str = "hinge"
+    div_loss: str = "l1"
+    lambda_div: float = 50.0
+    bootstrap: str = "smart"
+    bootstrap_hamming_filter: float = 0.90
+    bootstrap_property_filter: float = None
+    bootstrap_kmeans_filter: bool = True
+    bootstrap_max_count: int = 10
+    use_diversity_sampling: bool = True
+
+    dataset_size: int = 35
+    train_batch_size: int = 32  # training batch size
+    steps: int = 5000  # training steps
+
+    save_image_epoch: int = 100
+    save_model_epoch: int = 1000
+    eval_epoch: int = 100
+    bootstrap_epoch: int = 10
 
     use_recon_loss: bool = False
     recon_lambda: float = 1.0

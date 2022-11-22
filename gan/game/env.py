@@ -50,9 +50,9 @@ GameDescription["zelda"] = {
 }
 GameDescription["mario"] = {
     "ascii": ["X", "S", '-', "Q", "E", "<", ">", "[", "]", "?"],
-    "state_shape": (10, 28, 28),
+    "state_shape": (10, 32, 32),
     "map_shape": (14, 28),
-    "model_shape": [(7, 7), (14, 14), (28, 28)],
+    "model_shape": [(4, 4), (8, 8), (16, 16), (32, 32)],
     "ascii_to_tile": None,
 }
 

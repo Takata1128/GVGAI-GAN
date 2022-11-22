@@ -39,12 +39,16 @@ class LevelDataset(Dataset):
             features = self.game.get_property(level)
             level_tensor, label_tensor = self.to_tensor(level)
             item = LevelItem(level_tensor, label_tensor, level, features)
-            self.feature2indices[features] = [len(self.data)]
+            if features in self.feature2indices:
+                self.feature2indices[features].append(len(self.data))
+            else:
+                self.feature2indices[features] = [len(self.data)]
             self.data.append(item)
 
         print('### Properties ###')
         for key, value in self.feature2indices.items():
-            print(f'{key} : {len(value)}')
+            print(f'{key} : {len(value)}', end=', ')
+        print()
 
     def update(self):
         '''
@@ -73,17 +77,25 @@ class LevelDataset(Dataset):
         latent_batch = torch.zeros((batch_size, self.latent_size))
         level_batch = torch.zeros((batch_size, *self.game.input_shape))
         label_batch = torch.zeros((batch_size, self.game.input_shape[0]))
+        batch_features = {}
         for index in range(batch_size):
             if self.use_diversity_sampling:
                 key_index = np.random.choice(len(self.feature2indices))
                 idx = np.random.choice(self.feature2indices[list(
                     self.feature2indices.keys())[key_index]])
                 item = self.data[idx]
+                if item.features in batch_features:
+                    batch_features[item.features] += 1
+                else:
+                    batch_features[item.features] = 0
             else:
                 item = np.random.choice(self.data)
             latent_batch[index] = torch.randn(self.latent_size)
             level_batch[index] = item.data
             label_batch[index] = item.label
+        # for key, value in batch_features.items():
+        #     print(f'{key} : {value}', end=', ')
+        # print()
         return latent_batch, level_batch, label_batch
 
     def to_tensor(self, level: str):

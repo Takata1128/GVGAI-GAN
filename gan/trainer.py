@@ -22,7 +22,7 @@ from .utils import (
 
 
 class Trainer:
-    def __init__(self, game: Game, config: BaseConfig):
+    def __init__(self, game: Game, models: dict, config: BaseConfig):
         self.config = config
         self.game = game
 
@@ -48,6 +48,7 @@ class Trainer:
             config.level_data_path,
             self.game,
             latent_size=config.latent_size,
+            use_diversity_sampling=config.use_diversity_sampling
         )
         # Dataset files
         self.dataset_files = os.listdir(self.dataset.level_dir)
@@ -68,7 +69,7 @@ class Trainer:
             self.level_visualizer = GVGAILevelVisualizer(self.game)
 
         # Network
-        self._build_model()
+        self._build_model(models)
 
         # Other
         self.playability = 0
@@ -90,34 +91,9 @@ class Trainer:
             self.last_reset_steps = 0
             self.training_set_reset_count = 0
 
-    def _build_model(self):
-        latent_shape = (self.config.latent_size,)
-        from .models.small_models import Generator
-        self.generator = Generator(
-            out_ch=self.game.input_shape[0],
-            shapes=self.game.model_shape,
-            z_shape=latent_shape,
-            filters=self.config.generator_filters,
-            use_linear4z2features_g=self.config.use_linear4z2features_g,
-            use_self_attention=self.config.use_self_attention_g,
-            use_conditional=self.config.use_conditional,
-            use_deconv_g=self.config.use_deconv_g
-        ).to(self.device)
-
-        from .models.small_models import Discriminator
-        self.discriminator = Discriminator(
-            in_ch=self.game.input_shape[0],
-            shapes=self.game.model_shape[::-1],
-            filters=self.config.discriminator_filters,
-            use_bn=self.config.use_bn_d,
-            use_self_attention=self.config.use_self_attention_d,
-            use_minibatch_std=self.config.use_minibatch_std,
-            use_recon_loss=self.config.use_recon_loss,
-            use_conditional=self.config.use_conditional,
-            use_sn=self.config.use_sn_d,
-            use_pooling=self.config.use_pooling_d
-        ).to(self.device)
-
+    def _build_model(self, models):
+        self.generator = models['generator']
+        self.discriminator = models['discriminator']
         # Optimizer
         self.optimizer_g = torch.optim.RMSprop(
             self.generator.parameters(), lr=self.config.generator_lr
@@ -154,17 +130,22 @@ class Trainer:
             while self.step < self.config.steps + 1:
                 self.step += 1
                 self.generator.train()
-                latent, real, label = self.dataset.sample(
-                    batch_size=self.config.train_batch_size)
-                latent, real, label = (
-                    latent.to(self.device).float(),
-                    real.to(self.device).float(),
-                    label.to(self.device).int(),
-                )
-                fake_logit = self.generator(latent, label)
-                Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
-                    real, fake_logit, label
-                )
+
+                ### Discriminator Update ###
+                for _ in range(self.config.discrimianator_update_count):
+                    latent, real, label = self.dataset.sample(
+                        batch_size=self.config.train_batch_size)
+                    latent, real, label = (
+                        latent.to(self.device).float(),
+                        real.to(self.device).float(),
+                        label.to(self.device).int(),
+                    )
+                    fake_logit = self.generator(latent, label)
+                    Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
+                        real, fake_logit, label
+                    )
+
+                ### Generator Update ###
                 generator_loss, div_loss = self._generator_update(
                     latent, fake_logit, label)
 
@@ -461,22 +442,57 @@ class Trainer:
 
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
-                real_logits, fake_logits, self.config.smooth_label_value)
+                real_logits, fake_logits)
         elif self.config.adv_loss == "hinge":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss_hinge(
                 real_logits, fake_logits
             )
+        elif self.config.adv_loss == "wgan":
+            loss_real, loss_fake, D_x, D_G_z = loss.d_loss_wgan(
+                real_logits, fake_logits
+            )
+        elif self.config.adv_loss == 'wgan-gp':
+            loss_real, loss_fake, D_x, D_G_z = loss.d_loss_wgan(
+                real_logits, fake_logits
+            )
+        elif self.config.adv_loss == 'lsgan':
+            loss_real, loss_fake, D_x, D_G_z = loss.d_loss_lsgan(
+                real_logits, fake_logits
+            )
         else:
             raise NotImplementedError()
+
         discriminator_loss = loss_real + loss_fake
+
+        if self.config.use_gradient_penalty:
+            # gradient_penalty
+            batch_size = real_images_logit.size()[0]
+            alpha = torch.rand(batch_size, 1, 1, 1)
+            alpha = alpha.expand_as(real_images_logit).to(self.device)
+            interpolated = (
+                alpha * real_images_logit + (1 - alpha) * fake_images_logit)
+            prob_interpolated = self.discriminator(interpolated)
+            gradients = torch.autograd.grad(
+                outputs=prob_interpolated, inputs=interpolated, grad_outputs=torch.ones(prob_interpolated.size()).to(self.device), create_graph=True, retain_graph=True)[0]
+            gradients = gradients.view(batch_size, -1)
+            gradients_norm = torch.sqrt(
+                torch.sum(gradients**2, dim=1) + 1e-12)
+            gradient_penalty = ((gradients_norm - 1.0)**2).mean()
+            discriminator_loss += self.config.gp_lambda * gradient_penalty
 
         recon_loss_item = None
         if self.config.use_recon_loss:
             recon_loss = loss.recon_loss(real_recon, real_images_logit)
             discriminator_loss += self.config.recon_lambda * recon_loss
             recon_loss_item = recon_loss.item()
-        discriminator_loss.backward()
+
+        discriminator_loss.backward(retain_graph=True)
         self.optimizer_d.step()
+
+        if self.config.adv_loss == 'wgan':
+            # clip weights of discriminator
+            for p in self.discriminator.parameters():
+                p.data.clamp_(-0.01, 0.01)
 
         return D_x, D_G_z, discriminator_loss.item(), recon_loss_item
 
@@ -495,12 +511,19 @@ class Trainer:
             generator_loss = loss.g_loss(fake_logits)
         elif self.config.adv_loss == "hinge":
             generator_loss = loss.g_loss_hinge(fake_logits)
+        elif self.config.adv_loss == 'wgan':
+            generator_loss = loss.g_loss_wgan(fake_logits)
+        elif self.config.adv_loss == 'wgan-gp':
+            generator_loss = loss.g_loss_wgan(fake_logits)
+        elif self.config.adv_loss == 'lsgan':
+            generator_loss = loss.g_loss_lsgan(fake_logits)
+        else:
+            raise NotImplementedError()
 
         div_loss = loss.div_loss(
             latent, torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
-        if self.playability > self.config.div_loss_threshold_playability:
-            generator_loss += div_loss
-
+        generator_loss += div_loss
+        # if self.playability > self.config.div_loss_threshold_playability:
         generator_loss.backward()
         self.optimizer_g.step()
         return generator_loss.item(), div_loss.item()

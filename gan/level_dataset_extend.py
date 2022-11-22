@@ -98,7 +98,7 @@ make_another['aliens'] = make_another_aliens
 make_another['roguelike'] = make_another_roguelike
 
 
-def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True):
+def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True, dataset_size=None):
     np.random.seed(seed)
     if game.name == 'mario':
         visualizer = MarioLevelVisualizer(game, os.path.dirname(
@@ -117,7 +117,10 @@ def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True):
     lvl_strs = visualizer.game.get_original_levels(
         f'/root/mnt/pcg/GVGAI-GAN/gan/data/level/{game.name}_{game.version}/originals')
 
-    for j in range(len(lvl_strs)):
+    if dataset_size:
+        lvl_strs = lvl_strs[:dataset_size]
+
+    for j in range(len(lvl_strs) if not dataset_size else dataset_size):
         index = j % len(lvl_strs)
         lvl_str = lvl_strs[index]
         lvl_str = lvl_str.split()
