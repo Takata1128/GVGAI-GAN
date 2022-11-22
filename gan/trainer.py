@@ -13,7 +13,7 @@ import shutil
 from . import loss
 from .game.env import Game
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
-from .dataset import LevelDataset
+from .dataset import LevelDataset, LevelDatasetOld
 from .level_dataset_extend import prepare_dataset
 from .config import DataExtendConfig, BaseConfig
 from .utils import (
@@ -117,8 +117,8 @@ class Trainer:
                 self.config.checkpoints_path,
                 self.config.name + "-" + wandb.run.name.split("-")[-1],
             )
-            os.makedirs(self.model_save_path)
 
+            os.makedirs(self.model_save_path)
             self.latents_for_show, _, self.labels_for_show = self.dataset.sample(
                 9)
             self.latents_for_show = self.latents_for_show.to(
@@ -161,6 +161,173 @@ class Trainer:
                 wandb.log(metrics, step=self.step)
                 if not self.after_step():
                     break
+            self._evaluation()
+            self._save_models(self.model_save_path, None, None)
+
+    def train_old(self):
+        wandb.login()
+        metrics = {}
+        with wandb.init(project=f"Generation of {self.game.name} Level by GAN", config=self.config.__dict__):
+            # check model summary
+            self.generator.summary(
+                batch_size=self.config.train_batch_size, device=self.device)
+            self.discriminator.summary(
+                batch_size=self.config.train_batch_size, device=self.device)
+            # model_save_path
+            self.model_save_path = os.path.join(
+                self.config.checkpoints_path,
+                self.config.name + "-" + wandb.run.name.split("-")[-1],
+            )
+            os.makedirs(self.model_save_path)
+            self.latents_for_show, _, self.labels_for_show = self.dataset.sample(
+                9)
+            self.latents_for_show = self.latents_for_show.to(
+                self.device).float()
+            self.labels_for_show = self.labels_for_show.to(self.device).int()
+
+            # Dataset
+            self.dataset_old = LevelDatasetOld(
+                self.config.level_data_path,
+                self.game,
+                self.config.latent_size
+            )
+            self.train_loader = DataLoader(
+                self.dataset_old, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True)
+
+            self.step = 0
+
+            for epoch in range(1, 1000000):
+                self.generator.train()
+                for latent, real, label in self.train_loader:
+                    self.step += 1
+                    latent, real, label = (
+                        latent.to(self.device).float(),
+                        real.to(self.device).float(),
+                        label.to(self.device).int(),
+                    )
+                    fake_logit = self.generator(latent, label)
+
+                    Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
+                        real, fake_logit, label
+                    )
+                    generator_loss, div_loss = self._generator_update(
+                        latent, fake_logit, label)
+
+                    metrics["D(x)[Discriminator]"] = Dx
+                    metrics["D(G(z))[Discriminator]"] = DGz_d
+                    metrics["Discriminator Loss"] = discriminator_loss
+                    metrics["Generator Loss"] = generator_loss
+                    if self.config.div_loss:
+                        metrics["Generator Div Loss"] = div_loss
+                    if self.config.use_recon_loss:
+                        metrics["Reconstruction Loss"] = recon_loss
+                    metrics["Epoch"] = epoch
+                    wandb.log(metrics, step=self.step)
+
+                    if self.step >= self.config.steps:
+                        break
+
+                if self.step >= self.config.steps:
+                    break
+
+                self.generator.eval()
+                with torch.no_grad():
+                    if epoch % self.image_save_epoch == 0:
+                        self._save_images()
+                        if self.config.use_recon_loss:
+                            self._save_recon_images(real, label)
+
+                    if epoch % self.eval_epoch == 0 or (self.config.bootstrap and epoch % self.bootstrap_epoch) == 0:
+                        # bootstrap and data-extend
+                        latents = torch.randn(
+                            self.config.eval_playable_counts,
+                            self.config.latent_size,
+                        ).to(self.device)
+                        # labels = self._get_labels(
+                        #     self.config.eval_playable_counts).int()
+                        labels = None
+                        levels = self._generate_levels(latents, labels)
+                        playable_levels = []
+                        for level_str in levels:
+                            if self.game.check_playable(level_str):
+                                playable_levels.append(level_str)
+                        wandb.log(
+                            {
+                                "Playable Ratio": len(playable_levels)
+                                / self.config.eval_playable_counts
+                            },
+                            step=self.step
+                        )
+
+                        # eval
+                        if epoch % self.eval_epoch == 0:
+                            self._eval_models(levels, playable_levels)
+
+                        # save model
+                        if epoch % self.model_save_epoch == 0:
+                            self._save_models(
+                                self.model_save_path, epoch, None)
+
+                        # bootstrap
+                        unique_playable_levels = list(set(playable_levels))
+                        if epoch % self.bootstrap_epoch == 0 and self.config.bootstrap is not None and len(unique_playable_levels) > 1:
+                            unique_playable_levels = self._bootstrap(
+                                unique_playable_levels)
+                            # Dataset
+                            self.dataset_old = LevelDatasetOld(
+                                self.config.level_data_path,
+                                self.game,
+                                self.config.latent_size
+                            )
+                            self.dataset_files = os.listdir(
+                                self.dataset_old.image_dir)
+                            self.train_loader = DataLoader(
+                                self.dataset_old, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
+                            )
+
+                        if isinstance(self.config, DataExtendConfig):
+                            # 一定数生成したらGANの重みリセット
+                            if self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
+                                print("reset weights of model.")
+                                self._save_images()
+                                if self.config.use_recon_loss:
+                                    self._save_recon_images(real, label)
+                                self._build_model()
+                                self.last_reset_steps = self.step
+                                self.bootstrap_count = 0
+                            # 一定数生成したら学習データリセット
+                            if self.data_index > self.config.reset_train_dataset_th * (self.training_set_reset_count + 1):
+                                print(
+                                    f"Generated size exceeds {self.data_index}, so reset training dataset.")
+                                self.training_set_reset_count += 1
+                                prepare_dataset(
+                                    seed=self.config.seed, extend_data=self.config.clone_data, flip=self.config.flip_data, dataset_size=self.config.dataset_size, game_name=self.config.env_name, version=self.config.env_version
+                                )
+                                # Dataset
+                                self.dataset_old = LevelDatasetOld(
+                                    self.config.level_data_path,
+                                    self.game,
+                                    self.config.latent_size
+                                )
+                                self.dataset_files = os.listdir(
+                                    self.dataset_old.image_dir)
+                                self.train_loader = DataLoader(
+                                    self.dataset_old, batch_size=self.config.train_batch_size, shuffle=True, drop_last=True
+                                )
+
+                            # 全体である程度生成したらデータ拡張ストップ
+                            if self.data_index >= self.config.stop_generate_count:
+                                print(
+                                    f"Generated size exceeds {self.data_index}, so stop generation.")
+                                break
+
+                    # 一定期間たったら強制リセット
+                    if isinstance(self.config, DataExtendConfig) and self.step - self.last_reset_steps >= 3000:
+                        print(
+                            f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
+                        self._build_model()
+                        self.last_reset_steps = self.step
+
             self._evaluation()
             self._save_models(self.model_save_path, None, None)
 
@@ -376,7 +543,6 @@ class Trainer:
             for feature, v in self.dataset.feature2indices.items():
                 print(f"{feature}={len(v)} , ", end="")
             print()
-
             print(f"Filtered by features: {len(filtered_levels)}")
 
             # K-meansで選択

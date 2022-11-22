@@ -43,24 +43,24 @@ if __name__ == "__main__":
         }
         return models_dict
 
-    # Hinge + Conventional Bootstrap
-    game = Zelda('zelda', 'v1')
-    config = cfg.ZeldaConfig()
-    config.set_env()
-    config.bootstrap = 'baseline'
-    config.adv_loss = 'hinge'
-    config.div_loss = None
-    config.discriminator_lr = 0.0004
-    config.generator_lr = 0.0001
-    config.use_diversity_sampling = False
-    if config.dataset_type == "train":
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-    device = torch.device(
-        f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-    models_dict = get_models(game, config, device)
-    trainer = Trainer(game, models_dict, config)
-    trainer.train()
+    # # Hinge + Conventional Bootstrap
+    # game = Zelda('zelda', 'v1')
+    # config = cfg.ZeldaConfig()
+    # config.set_env()
+    # config.bootstrap = 'baseline'
+    # config.adv_loss = 'hinge'
+    # config.div_loss = None
+    # config.discriminator_lr = 0.0004
+    # config.generator_lr = 0.0001
+    # config.use_diversity_sampling = False
+    # if config.dataset_type == "train":
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train_old()
 
     # Hinge + Proposed
     game = Zelda('zelda', 'v1')
@@ -68,6 +68,8 @@ if __name__ == "__main__":
     config.set_env()
     config.bootstrap = 'smart'
     config.bootstrap_hamming_filter = 0.90
+    config.generator_lr = 0.00005
+    config.discriminator_lr = 0.00005
     config.adv_loss = 'hinge'
     config.div_loss = 'l1'
     config.use_diversity_sampling = False
@@ -79,7 +81,7 @@ if __name__ == "__main__":
         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
     models_dict = get_models(game, config, device)
     trainer = Trainer(game, models_dict, config)
-    trainer.train()
+    trainer.train_old()
 
     # Hinge + Proposed
     game = Zelda('zelda', 'v1')
