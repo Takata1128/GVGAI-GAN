@@ -688,8 +688,8 @@ class Trainer:
 
         div_loss = loss.div_loss(
             latent, torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
-        generator_loss += div_loss
-        # if self.playability > self.config.div_loss_threshold_playability:
+        if self.playability > 0.0:
+            generator_loss += div_loss
         generator_loss.backward()
         self.optimizer_g.step()
         return generator_loss.item(), div_loss.item()

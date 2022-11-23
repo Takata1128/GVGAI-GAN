@@ -43,6 +43,20 @@ if __name__ == "__main__":
         }
         return models_dict
 
+    game = Zelda('zelda', 'v1')
+    config = cfg.ZeldaConfig()
+    config.set_env()
+    config.bootstrap = 'smart'
+    config.adv_loss = 'hinge'
+    config.div_loss = 'l1'
+    prepare_dataset(
+        game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    device = torch.device(
+        f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    models_dict = get_models(game, config, device)
+    trainer = Trainer(game, models_dict, config)
+    trainer.train_old()
+
     # # Hinge + Conventional Bootstrap
     # game = Zelda('zelda', 'v1')
     # config = cfg.ZeldaConfig()
@@ -50,97 +64,104 @@ if __name__ == "__main__":
     # config.bootstrap = 'baseline'
     # config.adv_loss = 'hinge'
     # config.div_loss = None
-    # config.discriminator_lr = 0.0004
-    # config.generator_lr = 0.0001
     # config.use_diversity_sampling = False
-    # if config.dataset_type == "train":
-    #     prepare_dataset(
-    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
     # device = torch.device(
     #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
     # models_dict = get_models(game, config, device)
     # trainer = Trainer(game, models_dict, config)
-    # trainer.train_old()
+    # trainer.train()
 
-    # Hinge + Proposed
-    game = Zelda('zelda', 'v1')
-    config = cfg.ZeldaConfig()
-    config.set_env()
-    config.bootstrap = 'smart'
-    config.bootstrap_hamming_filter = 0.90
-    config.generator_lr = 0.00005
-    config.discriminator_lr = 0.00005
-    config.adv_loss = 'hinge'
-    config.div_loss = 'l1'
-    config.use_diversity_sampling = False
-    config.lambda_div = 50.0
-    if config.dataset_type == "train":
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-    device = torch.device(
-        f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-    models_dict = get_models(game, config, device)
-    trainer = Trainer(game, models_dict, config)
-    trainer.train_old()
+    # # Hinge + Proposed
+    # game = Zelda('zelda', 'v1')
+    # config = cfg.ZeldaConfig()
+    # config.set_env()
+    # config.bootstrap = 'smart'
+    # config.bootstrap_hamming_filter = 0.90
+    # config.adv_loss = 'hinge'
+    # config.div_loss = 'l1'
+    # config.use_diversity_sampling = False
+    # config.lambda_div = 50.0
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
 
-    # Hinge + Proposed
-    game = Zelda('zelda', 'v1')
-    config = cfg.ZeldaConfig()
-    config.set_env()
-    config.bootstrap = 'smart'
-    config.bootstrap_hamming_filter = 0.90
-    config.adv_loss = 'hinge'
-    config.div_loss = 'l1'
-    config.use_diversity_sampling = True
-    config.lambda_div = 50.0
-    if config.dataset_type == "train":
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-    device = torch.device(
-        f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-    models_dict = get_models(game, config, device)
-    trainer = Trainer(game, models_dict, config)
-    trainer.train()
-
-    # Hinge + Conventional Bootstrap
-    game = Zelda('zelda', 'v1')
-    config = cfg.ZeldaConfig()
-    config.set_env()
-    config.bootstrap = 'baseline'
-    config.adv_loss = 'baseline'
-    # config.use_gradient_penalty = True
+    # # Wgan + Conventional Bootstrap
+    # game = Zelda('zelda', 'v1')
+    # config = cfg.ZeldaConfig()
+    # config.set_env()
+    # config.bootstrap = 'baseline'
+    # config.adv_loss = 'wgan'
     # config.discrimianator_update_count = 5
-    config.use_diversity_sampling = True
-    config.div_loss = None
-    if config.dataset_type == "train":
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-    device = torch.device(
-        f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-    models_dict = get_models(game, config, device)
-    trainer = Trainer(game, models_dict, config)
-    trainer.train()
+    # config.div_loss = None
+    # config.use_diversity_sampling = False
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
 
-    # Hinge + Proposed
-    game = Zelda('zelda', 'v1')
-    config = cfg.ZeldaConfig()
-    config.set_env()
-    config.bootstrap = 'smart'
-    config.bootstrap_hamming_filter = 0.90
-    config.adv_loss = 'baseline'
+    # # Wgan + Proposed
+    # game = Zelda('zelda', 'v1')
+    # config = cfg.ZeldaConfig()
+    # config.set_env()
+    # config.bootstrap = 'smart'
+    # config.bootstrap_hamming_filter = 0.90
+    # config.adv_loss = 'wgan'
     # config.discrimianator_update_count = 5
-    # config.use_gradient_penalty = True
-    config.use_diversity_sampling = True
-    config.div_loss = 'l1'
-    config.lambda_div = 50.0
-    if config.dataset_type == "train":
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-    device = torch.device(
-        f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-    models_dict = get_models(game, config, device)
-    trainer = Trainer(game, models_dict, config)
-    trainer.train()
+    # config.div_loss = 'l1'
+    # config.lambda_div = 0.5
+    # config.use_diversity_sampling = False
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
+
+    # # Diversity Sampling
+
+    # # Hinge + Conventional Bootstrap
+    # game = Zelda('zelda', 'v1')
+    # config = cfg.ZeldaConfig()
+    # config.set_env()
+    # config.bootstrap = 'baseline'
+    # config.adv_loss = 'hinge'
+    # config.div_loss = None
+    # config.use_diversity_sampling = True
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
+
+    # # Hinge + Proposed
+    # game = Zelda('zelda', 'v1')
+    # config = cfg.ZeldaConfig()
+    # config.set_env()
+    # config.bootstrap = 'smart'
+    # config.bootstrap_hamming_filter = 0.90
+    # config.adv_loss = 'hinge'
+    # config.div_loss = 'l1'
+    # config.use_diversity_sampling = True
+    # config.lambda_div = 50.0
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
 
     # # Wgan + Conventional Bootstrap
     # game = Zelda('zelda', 'v1')
@@ -151,9 +172,8 @@ if __name__ == "__main__":
     # config.discrimianator_update_count = 5
     # config.div_loss = None
     # config.use_diversity_sampling = True
-    # if config.dataset_type == "train":
-    #     prepare_dataset(
-    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
     # device = torch.device(
     #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
     # models_dict = get_models(game, config, device)
@@ -171,9 +191,8 @@ if __name__ == "__main__":
     # config.div_loss = 'l1'
     # config.lambda_div = 0.5
     # config.use_diversity_sampling = True
-    # if config.dataset_type == "train":
-    #     prepare_dataset(
-    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
     # device = torch.device(
     #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
     # models_dict = get_models(game, config, device)
