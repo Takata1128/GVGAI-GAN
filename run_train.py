@@ -86,7 +86,6 @@ if __name__ == "__main__":
     for i in range(1):
         # ours
         config = SmallModelConfig()
-        config.seed = i
         config.bootstrap_property_filter = None
         config.set_env()
         config.dataset_type = 'train'
@@ -99,30 +98,30 @@ if __name__ == "__main__":
         trainer = Trainer(config)
         trainer.train()
 
-    for i in range(1):
-        # ours2
-        # config = DataExtendConfig()
-        # config.seed = i
-        # config.set_env()
-        # config.dataset_type = "train"
-        # if config.dataset_type == "train":
-        #     prepare_dataset(
-        #         seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
-        #     )
-        # trainer = Trainer(config)
-        # trainer.train()
+    # for i in range(1):
+    #     # ours2
+    #     # config = DataExtendConfig()
+    #     # config.seed = i
+    #     # config.set_env()
+    #     # config.dataset_type = "train"
+    #     # if config.dataset_type == "train":
+    #     #     prepare_dataset(
+    #     #         seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size, game_name=config.env_name, version=config.env_version
+    #     #     )
+    #     # trainer = Trainer(config)
+    #     # trainer.train()
 
-        config = SmallModelConfig()
-        config.name = 'SAmodel'
-        config.seed = i
-        config.save_image_epoch = 20
-        config.set_env()
-        config.dataset_type = 'generated'
-        config.save_model_interval = 200 * config.train_batch_size
-        config.bootstrap = None
-        config.div_loss = None
-        trainer = Trainer(config)
-        trainer.train()
+    #     config = SmallModelConfig()
+    #     config.name = 'SAmodel'
+    #     config.seed = i
+    #     config.save_image_epoch = 20
+    #     config.set_env()
+    #     config.dataset_type = 'generated'
+    #     config.save_model_interval = 200 * config.train_batch_size
+    #     config.bootstrap = None
+    #     config.div_loss = None
+    #     trainer = Trainer(config)
+    #     trainer.train()
 
     # only bootstrap
     # config = SmallModelConfig()
