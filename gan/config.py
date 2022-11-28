@@ -230,7 +230,7 @@ class ZeldaConfig(BaseConfig):
     bootstrap_max_count: int = 10
     use_diversity_sampling: bool = True
 
-    dataset_size: int = 35
+    dataset_size: int = 5
     train_batch_size: int = 32  # training batch size
     steps: int = 10000  # training steps
 
@@ -242,5 +242,5 @@ class ZeldaConfig(BaseConfig):
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
 
-    generator_lr: float = 0.00005
-    discriminator_lr: float = 0.00005
+    generator_lr: float = 0.0001
+    discriminator_lr: float = 0.0004

@@ -50,28 +50,37 @@ class LevelDataset(Dataset):
             print(f'{key} : {len(value)}', end=', ')
         print()
 
-    def update(self):
-        '''
-        datasetの更新
-        後に作ったレベルのファイル名が辞書順で後ろになることを仮定
-        '''
-        self.level_paths = [os.path.join(
-            self.level_dir, name) for name in os.listdir(self.level_dir)]
+    def add_data(self, level, features):
+        index = self.data_length
+        level_tensor, label_tensor = self.to_tensor(level)
+        item = LevelItem(level_tensor, label_tensor, level, features)
+        if features in self.feature2indices:
+            self.feature2indices[features].append(index)
+        else:
+            self.feature2indices[features] = [index]
+        self.data.append(item)
+        self.data_length = len(self.data)
 
-        for index in range(self.data_length, len(self.level_paths)):
-            path = self.level_paths[index]
-            with open(path, 'r') as f:
-                level = f.read()
-            features = self.game.get_property(level)
-            level_tensor, label_tensor = self.to_tensor(level)
-            item = LevelItem(level_tensor, label_tensor, level, features)
-            if features in self.feature2indices:
-                self.feature2indices[features].append(index)
-            else:
-                self.feature2indices[features] = [index]
-            self.data.append(item)
+    # def update(self):
+    #     '''
+    #     datasetの更新
+    #     後に作ったレベルのファイル名が辞書順で後ろになることを仮定
+    #     '''
 
-        self.data_length = len(self.level_paths)
+    #     for index in range(self.data_length, len(self.level_paths)):
+    #         path = self.level_paths[index]
+    #         with open(path, 'r') as f:
+    #             level = f.read()
+    #         features = self.game.get_property(level)
+    #         level_tensor, label_tensor = self.to_tensor(level)
+    #         item = LevelItem(level_tensor, label_tensor, level, features)
+    #         if features in self.feature2indices:
+    #             self.feature2indices[features].append(index)
+    #         else:
+    #             self.feature2indices[features] = [index]
+    #         self.data.append(item)
+
+    #     self.data_length = len(self.data)
 
     def sample(self, batch_size: int):
         latent_batch = torch.zeros((batch_size, self.latent_size))

@@ -569,7 +569,6 @@ class Trainer:
                     self.augmented_data_index += 1
         wandb.log({"Dataset Size": len(self.dataset_files)}, self.step)
         # Update dataset
-        self.dataset.update()
         return selected
 
     def _level_add(self, level_str):
@@ -581,12 +580,13 @@ class Trainer:
             "w",
         ) as f:
             f.write(level_str)
-            property = self.game.get_property(level_str)
+            feature = self.game.get_property(level_str)
+            self.dataset.add_data(level_str, feature)
             for i, pd in enumerate(self.dataset_properties_dicts):
-                if property[i] in pd:
-                    pd[property[i]] += 1
+                if feature[i] in pd:
+                    pd[feature[i]] += 1
                 else:
-                    pd[property[i]] = 1
+                    pd[feature[i]] = 1
 
     def _discriminator_update(self, real_images_logit, fake_images_logit, label=None):
         """
@@ -688,8 +688,8 @@ class Trainer:
 
         div_loss = loss.div_loss(
             latent, torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
-        if self.playability > 0.0:
-            generator_loss += div_loss
+        # if self.playability > 0.0:
+        generator_loss += div_loss
         generator_loss.backward()
         self.optimizer_g.step()
         return generator_loss.item(), div_loss.item()
