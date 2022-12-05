@@ -20,7 +20,7 @@ GameDescription["aliens"] = {
     "state_shape": (5, 12, 32),
     "model_shape": [(3, 4), (6, 8), (12, 16), (12, 32)],
 }
-GameDescription["zelda"] = {
+GameDescription["zelda_v1"] = {
     "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
     "ascii_to_tile": {
         "": ["floor"],
@@ -44,11 +44,39 @@ GameDescription["zelda"] = {
         '3': ['floor', 'monsterSlow'],
         'A': ['floor', 'nokey'],
     },
-    "state_shape": (8, 12, 16),
+    "state_shape": (8, 16, 16),
     "map_shape": (12, 16),
     "model_shape": [(3, 4), (6, 8), (12, 16)],
 }
-GameDescription["mario"] = {
+GameDescription["zelda_v0"] = {
+    "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
+    "ascii_to_tile": {
+        "": ["floor"],
+        "wall": ["wall"],
+        "goal": ["floor", "goal"],
+        "key": ["floor", "key"],
+        "sword": ["floor", "sword"],
+        "monsterQuick": ["floor", "monsterQuick"],
+        "monsterNormal": ["floor", "monsterNormal"],
+        "monsterSlow": ["floor", "monsterSlow"],
+        "nokey": ["floor", "nokey"],
+        "withkey": ["floor", "withkey"],
+    },
+    'char_to_tile': {
+        '.': ['floor'],
+        'w': ['wall'],
+        'g': ['floor', 'goal'],
+        '+': ['floor', 'key'],
+        '1': ['floor', 'monsterQuick'],
+        '2': ['floor', 'monsterNormal'],
+        '3': ['floor', 'monsterSlow'],
+        'A': ['floor', 'nokey'],
+    },
+    "state_shape": (8, 16, 16),
+    "map_shape": (9, 13),
+    "model_shape": [(3, 4), (6, 8), (12, 16)],
+}
+GameDescription["mario_v0"] = {
     "ascii": ["X", "S", '-', "Q", "E", "<", ">", "[", "]", "?"],
     "state_shape": (10, 32, 32),
     "map_shape": (14, 28),
@@ -105,15 +133,16 @@ class Game(metaclass=ABCMeta):
         self.name = name
         self.version = version
         try:
-            self.ascii = GameDescription[name]["ascii"]
-            self.input_shape = GameDescription[name]["state_shape"]
-            self.map_shape = GameDescription[name]["map_shape"]
-            self.model_shape = GameDescription[name]["model_shape"]
-            self.ascii_to_tile = GameDescription[name]["ascii_to_tile"]
+            self.ascii = GameDescription[f'{name}_{version}']["ascii"]
+            self.input_shape = GameDescription[f'{name}_{version}']["state_shape"]
+            self.map_shape = GameDescription[f'{name}_{version}']["map_shape"]
+            self.model_shape = GameDescription[f'{name}_{version}']["model_shape"]
+            self.ascii_to_tile = GameDescription[f'{name}_{version}']["ascii_to_tile"]
         except:
-            raise Exception(name + " data not implemented in env.py")
-        if 'char_to_tile' in GameDescription[name]:
-            self.char_to_tile = GameDescription[name]['char_to_tile']
+            raise Exception(f'{name}_{version}' +
+                            " data not implemented in env.py")
+        if 'char_to_tile' in GameDescription[f'{name}_{version}']:
+            self.char_to_tile = GameDescription[f'{name}_{version}']['char_to_tile']
         self.map_level = np.vectorize(lambda x: self.ascii[x])
 
     def get_original_levels(self, path: str = None):

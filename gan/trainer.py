@@ -105,7 +105,7 @@ class Trainer:
     def train(self):
         wandb.login()
         metrics = {}
-        with wandb.init(project=f"Generation of {self.game.name} Level by GAN", config=self.config.__dict__):
+        with wandb.init(project=f"Generation of {self.config.env_fullname} Level by GAN", config=self.config.__dict__):
             # check model summary
             self.generator.summary(
                 batch_size=self.config.train_batch_size, device=self.device)
@@ -687,7 +687,7 @@ class Trainer:
             raise NotImplementedError()
 
         div_loss = loss.div_loss(
-            latent, torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div)
+            latent, torch.softmax(fake_images_logit, dim=1), self.config.div_loss, self.config.lambda_div, self.game)
         # if self.playability > 0.0:
         generator_loss += div_loss
         generator_loss.backward()
@@ -727,7 +727,7 @@ class Trainer:
 
     def _evaluation(self):
         playable_levels = []
-        while True:
+        for i in range(100):
             latents_for_eval, _, labels_for_eval = self.dataset.sample(5000)
             latents_for_eval, labels_for_eval = latents_for_eval.to(
                 self.device).float(), labels_for_eval.to(self.device).int()
@@ -742,6 +742,11 @@ class Trainer:
             if len(playable_levels) == self.config.final_evaluation_levels:
                 break
 
+        if len(playable_levels) == self.config.final_evaluation_levels:
+            metrics = self.game.evaluation(playable_levels)
+        else:
+            metrics = {}
+
         playable_levels = []
         latents_for_eval, _, labels_for_eval = self.dataset.sample(
             self.config.final_evaluation_levels)
@@ -753,7 +758,6 @@ class Trainer:
             if self.game.check_playable(level_str):
                 playable_levels.append(level_str)
 
-        metrics = self.game.evaluation(playable_levels)
         metrics["Final Playable Ratio"] = len(
             playable_levels) / self.config.final_evaluation_levels
         print("Playable Ratio:", len(playable_levels) /

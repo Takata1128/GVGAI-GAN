@@ -8,12 +8,13 @@ import os
 class BaseConfig:
     # training name
     name: str = "none"
+
     # environment name
     env_name: str = "zelda"
     env_version: str = 'v1'
 
     # model architecture
-    latent_size: int = 32  # latent dims for generation
+    latent_size: int = 16  # latent dims for generation
     generator_filters: int = 128
     discriminator_filters: int = 128
     use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
@@ -53,14 +54,16 @@ class BaseConfig:
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
     gpu_id: int = 5  # gpu index
-    eval_playable_counts: int = 300  # number of z to check playable.
+    eval_playable_counts: int = 100  # number of z to check playable.
     clone_data: bool = False
     flip_data: bool = False
     bootstrap: str = None
     dataset_max_change_count: int = 5
-    final_evaluation_levels: int = 10000
+    final_evaluation_levels: int = 15000
 
-    def set_env(self):
+    def set_env(self, game: Game):
+        self.env_name = game.name
+        self.env_version = game.version
         self.env_fullname: str = f'{self.env_name}_{self.env_version}'
 
         # data path
@@ -177,21 +180,23 @@ class MarioConfig(BaseConfig):
     env_version: str = 'v0'
 
     generator_filters: int = 64
-    discrimianator_filters: int = 64
+    discriminator_filters: int = 64
 
     # learning parameters
-    adv_loss: str = "hinge"
+    adv_loss: str = "wgan"
+    discrimianator_update_count: int = 5
     div_loss: str = None
 
     bootstrap: str = None
 
     train_batch_size: int = 32  # training batch size
-    steps: int = 10000 * (train_batch_size // 32)  # training steps
+    steps: int = 5000  # training steps
 
     save_image_epoch: int = 100
     save_model_epoch: int = 1000
     eval_epoch: int = 100
     bootstrap_epoch: int = 100
+    dataset_size: int = 174
 
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
@@ -206,8 +211,8 @@ class ZeldaConfig(BaseConfig):
 
     # model define
     latent_size: int = 32  # latent dims for generation
-    generator_filters: int = 128
-    discriminator_filters: int = 128
+    generator_filters: int = 64
+    discriminator_filters: int = 64
     use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
     use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
     use_linear4z2features_g: bool = False
@@ -220,9 +225,10 @@ class ZeldaConfig(BaseConfig):
     use_conditional: bool = False
 
     # learning parameters
-    adv_loss: str = "hinge"
+    adv_loss: str = "wgan"
+    discrimianator_update_count: int = 5
     div_loss: str = "l1"
-    lambda_div: float = 50.0
+    lambda_div: float = 0.5
     bootstrap: str = "smart"
     bootstrap_hamming_filter: float = 0.90
     bootstrap_property_filter: float = None
@@ -232,7 +238,7 @@ class ZeldaConfig(BaseConfig):
 
     dataset_size: int = 5
     train_batch_size: int = 32  # training batch size
-    steps: int = 10000  # training steps
+    steps: int = 5000  # training steps
 
     save_image_epoch: int = 100
     save_model_epoch: int = 1000
@@ -243,4 +249,4 @@ class ZeldaConfig(BaseConfig):
     recon_lambda: float = 1.0
 
     generator_lr: float = 0.0001
-    discriminator_lr: float = 0.0004
+    discriminator_lr: float = 0.0001

@@ -6,8 +6,12 @@ from collections import deque
 class Zelda(Game):
     def __init__(self, name, version):
         super().__init__(name, version)
-        self.height = 12
-        self.width = 16
+        if version == 'v0':
+            self.height = 9
+            self.width = 13
+        else:
+            self.height = 12
+            self.width = 16
 
     def check_playable(self, lvl_str: str):
         g = lvl_str.split()
@@ -120,7 +124,7 @@ class Zelda(Game):
                 hamming = check_level_hamming(
                     levels_small_set[i], levels_small_set[j])
                 total_hamming_dist += hamming
-                if hamming / (12 * 16) <= 0.10:
+                if hamming / (self.height * self.width) <= 0.10:
                     dup90 += 1
                 n += 1
 
