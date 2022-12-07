@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from .env import Env
+from .game.env import Game
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 import numpy as np
 import torch
@@ -98,18 +98,16 @@ make_another['aliens'] = make_another_aliens
 make_another['roguelike'] = make_another_roguelike
 
 
-def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_name="zelda", version='v1'):
+def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True, dataset_size=None):
     np.random.seed(seed)
-    env_def = Env(game_name, version)
-
-    if env_def.name == 'mario':
-        visualizer = MarioLevelVisualizer(env_def, os.path.dirname(
-            __file__) + f"/data/level/{game_name}_{version}/")
+    if game.name == 'mario':
+        visualizer = MarioLevelVisualizer(game, os.path.dirname(
+            __file__) + f"/data/level/{game.name}_{game.version}/")
     else:
-        visualizer = GVGAILevelVisualizer(env_def)
+        visualizer = GVGAILevelVisualizer(game)
 
     train_dir_path = os.path.dirname(
-        __file__) + f"/data/level/{game_name}_{version}/train/"
+        __file__) + f"/data/level/{game.name}_{game.version}/train/"
 
     # clean dirs
     if os.path.exists(train_dir_path):
@@ -117,13 +115,16 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
     os.makedirs(train_dir_path)
 
     lvl_strs = visualizer.game.get_original_levels(
-        f'/root/mnt/pcg/GVGAI-GAN/gan/data/level/{game_name}_{version}/originals')
+        f'/root/mnt/pcg/GVGAI-GAN/gan/data/level/{game.name}_{game.version}/originals')
 
-    for j in range(dataset_size):
+    if dataset_size:
+        lvl_strs = lvl_strs[:dataset_size]
+
+    for j in range(len(lvl_strs) if not dataset_size else dataset_size):
         index = j % len(lvl_strs)
         lvl_str = lvl_strs[index]
         lvl_str = lvl_str.split()
-        target_shape = env_def.model_shape[-1]
+        target_shape = game.model_shape[-1]
 
         # PADDING
         for i in range(target_shape[0]):
@@ -132,7 +133,7 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
                 s = lvl_str[i]
             width = len(s)
             for _ in range(target_shape[1] - width):
-                s += env_def.ascii[1]
+                s += game.ascii[game.padding_index]
             if i < len(lvl_str):
                 lvl_str[i] = s
             else:
@@ -141,11 +142,11 @@ def prepare_dataset(seed=0, extend_data=True, flip=True, dataset_size=100, game_
         lvl_str = "\n".join(lvl_str)
 
         if extend_data:
-            s = make_another[game_name](lvl_str)
+            s = make_another[game.name](lvl_str)
         else:
             s = lvl_str
         with open(
-            train_dir_path + f"{game_name}_{str(j)}", mode="w"
+            train_dir_path + f"{game.name}_{str(j)}", mode="w"
         ) as f:
             f.write(s)
 

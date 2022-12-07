@@ -1,15 +1,15 @@
 import os
 import gym_gvgai
 from PIL import Image, ImageDraw, ImageFont
-from .env import Env
+from .game.env import Game
 
 
 class MarioLevelVisualizer:
-    def __init__(self, env: Env, dir: str, tile_size=16, padding=2):
+    def __init__(self, env: Game, sprites_dir: str, tile_size=16, padding=2):
         self.game = env
         self.tile_size = tile_size
         self.pad = padding
-        self.dir = dir
+        self.dir = sprites_dir
         self.char_to_img = self._load_sprites()
 
     def _load_sprites(self):
@@ -27,7 +27,7 @@ class MarioLevelVisualizer:
             ret[c] = sprite
         return ret
 
-    def draw_level(self, level_str):
+    def draw_level(self, level_str):  # , visited):
         lvl_rows = level_str.split()
         w = len(lvl_rows[0])
         h = len(lvl_rows)
@@ -38,6 +38,8 @@ class MarioLevelVisualizer:
         for y, r in enumerate(lvl_rows):
             for x, c in enumerate(r):
                 img = self.char_to_img[c]
+                # if visited[y][x]:
+                #     img = img.point(lambda x: x + 150)
                 lvl_img.paste(
                     img, (p + x * ts, p + y * ts, p +
                           (x + 1) * ts, p + (y + 1) * ts)
@@ -46,7 +48,7 @@ class MarioLevelVisualizer:
 
 
 class GVGAILevelVisualizer:
-    def __init__(self, env: Env, tile_size=16, padding=2):
+    def __init__(self, env: Game, tile_size=16, padding=2):
         self.game = env
         self.tile_size = tile_size
         self.dir = gym_gvgai.dir

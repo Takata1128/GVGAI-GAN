@@ -3,7 +3,7 @@ from play_rl.wrappers import GridGame
 from play_rl.policy import Policy
 from gan.small_models import Generator
 from gan.config import BaseConfig
-from gan.env import Env
+from gan.game.env import Game
 from gym import spaces
 from __future__ import annotations
 import torch
@@ -17,7 +17,7 @@ ENV_LIMIT = 100
 
 
 class GridGameOptimEnv(gym.Env):
-    def __init__(self, gan_config: BaseConfig, env_def: Env, levels_dir_path: str, id: int):
+    def __init__(self, gan_config: BaseConfig, env_def: Game, levels_dir_path: str, id: int):
         self.env_def = env_def
         self.gan_config = gan_config
         self.action_space = spaces.Box(

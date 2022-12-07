@@ -228,11 +228,11 @@ class Generator(nn.Module):
 
         if 0 in self.use_self_attention:
             if self.use_conditional:
-                self.self_attn0 = ConditionalSelfAttention(
+                self.self_attn1 = ConditionalSelfAttention(
                     layer_input_channels, shapes[0], out_ch)
                 layer_input_channels += out_ch  # out_dim == kinds of tile.
             else:
-                self.self_attn0 = Self_Attn(layer_input_channels)
+                self.self_attn1 = Self_Attn(layer_input_channels)
 
         self.block1 = GenBlock(
             layer_input_channels, filters * 2, True, use_deconv_g
@@ -241,11 +241,11 @@ class Generator(nn.Module):
 
         if 1 in self.use_self_attention:
             if self.use_conditional:
-                self.self_attn1 = ConditionalSelfAttention(
+                self.self_attn2 = ConditionalSelfAttention(
                     layer_input_channels, shapes[1], out_ch)
                 layer_input_channels += out_ch  # out_dim == kinds of tile.
             else:
-                self.self_attn1 = Self_Attn(layer_input_channels)
+                self.self_attn2 = Self_Attn(layer_input_channels)
 
         self.block2 = GenBlock(
             layer_input_channels, filters, True, use_deconv_g
@@ -254,12 +254,12 @@ class Generator(nn.Module):
 
         if 2 in self.use_self_attention:
             if self.use_conditional:
-                self.self_attn2 = ConditionalSelfAttention(
+                self.self_attn3 = ConditionalSelfAttention(
                     filters, shapes[2], out_ch)
                 layer_input_channels += out_ch  # out_dim == kinds of tile.
 
             else:
-                self.self_attn2 = Self_Attn(filters)
+                self.self_attn3 = Self_Attn(filters)
         self.outconv = nn.Sequential(nn.Conv2d(layer_input_channels, out_ch,
                                                kernel_size=1, stride=1))
 
@@ -272,16 +272,16 @@ class Generator(nn.Module):
             x = x.view(-1, self.filters * 4, *self.init_shape)
 
         if 0 in self.use_self_attention:
-            x = self.self_attn0(x, label)
+            x = self.self_attn1(x, label)
         x = self.block1(x)
 
         if 1 in self.use_self_attention:
-            x = self.self_attn1(x, label)
+            x = self.self_attn2(x, label)
 
         x = self.block2(x)
 
         if 2 in self.use_self_attention:
-            x = self.self_attn2(x, label)
+            x = self.self_attn3(x, label)
         x = self.outconv(x)
         return x
 
