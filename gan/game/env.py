@@ -77,7 +77,7 @@ GameDescription["zelda_v0"] = {
     "model_shape": [(3, 4), (6, 8), (12, 16)],
 }
 GameDescription["mario_v0"] = {
-    "ascii": ["X", "S", '-', "Q", "E", "<", ">", "[", "]", "?"],
+    "ascii": ["X", 'S', '-', "Q", "E", "<", ">", "[", "]", "?"],
     "state_shape": (10, 32, 32),
     "map_shape": (14, 28),
     "model_shape": [(4, 4), (8, 8), (16, 16), (32, 32)],
@@ -144,6 +144,7 @@ class Game(metaclass=ABCMeta):
         if 'char_to_tile' in GameDescription[f'{name}_{version}']:
             self.char_to_tile = GameDescription[f'{name}_{version}']['char_to_tile']
         self.map_level = np.vectorize(lambda x: self.ascii[x])
+        self.padding_index = 1
 
     def get_original_levels(self, path: str = None):
         if path is not None:
@@ -168,19 +169,19 @@ class Game(metaclass=ABCMeta):
                 levels.append(content)
             return levels
 
-    def level_str_to_ndarray(self, lvl_str: str):
-        ret = np.zeros(
-            (len(self.ascii),
-             self.input_shape[1], self.input_shape[2]),
-        )
-        index = 0
-        for i, c in enumerate(lvl_str):
-            if c == "\n":
-                continue
-            ret[self.ascii.index(c), index // self.input_shape[2],
-                index % self.input_shape[2]] = 1
-            index += 1
-        return ret
+    # def level_str_to_ndarray(self, lvl_str: str):
+    #     ret = np.zeros(
+    #         (len(self.ascii),
+    #          self.input_shape[1], self.input_shape[2]),
+    #     )
+    #     index = 0
+    #     for i, c in enumerate(lvl_str):
+    #         if c == "\n":
+    #             continue
+    #         ret[self.ascii.index(c), index // self.input_shape[2],
+    #             index % self.input_shape[2]] = 1
+    #         index += 1
+    #     return ret
 
     def level_tensor_to_strs(self, tensor: torch.tensor):
         lvl_array = tensor.argmax(dim=1).cpu().numpy()

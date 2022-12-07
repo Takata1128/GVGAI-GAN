@@ -17,8 +17,10 @@ class BaseConfig:
     latent_size: int = 16  # latent dims for generation
     generator_filters: int = 128
     discriminator_filters: int = 128
-    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
-    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
+    # field(default_factory=lambda: [1, 2])
+    use_self_attention_g: list[int] = False
+    # field(default_factory=lambda: [0, 1])
+    use_self_attention_d: list[int] = False
     use_linear4z2features_g: bool = False
     use_deconv_g: bool = True
     use_bn_d: bool = False
@@ -183,9 +185,10 @@ class MarioConfig(BaseConfig):
     discriminator_filters: int = 64
 
     # learning parameters
-    adv_loss: str = "wgan"
-    discrimianator_update_count: int = 5
+    adv_loss: str = "hinge"
+    discrimianator_update_count: int = 1
     div_loss: str = None
+    lambda_div: float = 50.0
 
     bootstrap: str = None
 
@@ -195,14 +198,14 @@ class MarioConfig(BaseConfig):
     save_image_epoch: int = 100
     save_model_epoch: int = 1000
     eval_epoch: int = 100
-    bootstrap_epoch: int = 100
+    bootstrap_epoch: int = 10
     dataset_size: int = 174
 
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
 
     generator_lr: float = 0.0001
-    discriminator_lr: float = 0.0001
+    discriminator_lr: float = 0.0004
 
 
 @dataclass

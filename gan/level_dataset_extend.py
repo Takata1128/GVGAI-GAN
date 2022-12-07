@@ -133,7 +133,7 @@ def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True, dataset_siz
                 s = lvl_str[i]
             width = len(s)
             for _ in range(target_shape[1] - width):
-                s += game.ascii[1]
+                s += game.ascii[game.padding_index]
             if i < len(lvl_str):
                 lvl_str[i] = s
             else:

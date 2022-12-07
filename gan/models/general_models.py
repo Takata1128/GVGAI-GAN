@@ -219,6 +219,8 @@ class Generator(nn.Module):
             cngf = cngf * 2
             tisize = tisize * 2
 
+        self.mods = []
+
         main = nn.Sequential()
         # input is Z, going into a convolution
         main.add_module('initial_{0}-{1}_convt'.format(nz, cngf),
@@ -228,8 +230,11 @@ class Generator(nn.Module):
         main.add_module('initial_{0}_relu'.format(cngf),
                         nn.ReLU(True))
 
+        self.mods.append(main)
+
         csize, cndf = 4, cngf
         while csize < isize // 2:
+            main = nn.Sequential()
             main.add_module('pyramid_{0}-{1}_convt'.format(cngf, cngf // 2),
                             nn.ConvTranspose2d(cngf, cngf // 2, 4, 2, 1, bias=False))
             main.add_module('pyramid_{0}_batchnorm'.format(cngf // 2),
@@ -239,18 +244,22 @@ class Generator(nn.Module):
             if self.self_attention:
                 main.add_module('pyramid_{0}_selfattn'.format(
                     cngf // 2), Self_Attn(cngf // 2))
+            self.mods.append(main)
             cngf = cngf // 2
             csize = csize * 2
 
         # Extra layers
         for t in range(n_extra_layers):
+            main = nn.Sequential()
             main.add_module('extra-layers-{0}_{1}_conv'.format(t, cngf),
                             nn.Conv2d(cngf, cngf, 3, 1, 1, bias=False))
             main.add_module('extra-layers-{0}_{1}_batchnorm'.format(t, cngf),
                             nn.BatchNorm2d(cngf))
             main.add_module('extra-layers-{0}_{1}_relu'.format(t, cngf),
                             nn.ReLU(True))
+            self.mods.append(main)
 
+        main = nn.Sequential()
         main.add_module('final_{0}-{1}_convt'.format(cngf, nc),
                         nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False))
         main.add_module('final_{0}_tanh'.format(nc),
@@ -259,16 +268,17 @@ class Generator(nn.Module):
             main.add_module('final_{0}_selfattn'.format(nc), Self_Attn(nc))
             main.add_module('final_{0}_tanh'.format(nc),
                             nn.ReLU())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
-
-        self.main = main
+        self.mods.append(main)
+        self.mods = nn.ModuleList(self.mods)
 
     def forward(self, input, label=None):
-        input = input.reshape(*input.shape, 1, 1)
-        output = self.main(input)
-
-        #print (output[0,:,0,0])
-        # exit()
-        return output
+        hidden = input.reshape(*input.shape, 1, 1)
+        hiddens = []
+        for module in self.mods:
+            hidden = module(hidden)
+            hiddens.append(hidden)
+        output = hidden
+        return output, hiddens
 
     def summary(self, batch_size=64, device=None):
         summary(self, (batch_size, self.nz), device=device)

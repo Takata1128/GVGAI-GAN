@@ -279,8 +279,7 @@ def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: Ga
         ret = np.zeros((len(level_str), len(level_str[0])))
         for i, s in enumerate(level_str):
             for j, c in enumerate(level_str[i]):
-                ret[i, j] = env.ascii.index(
-                    c) / len(env.ascii)
+                ret[i, j] = env.ascii.index(c)
         return ret.reshape(-1)
 
     def elbow(levels_reduced):

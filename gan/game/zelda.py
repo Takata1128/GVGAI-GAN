@@ -131,17 +131,17 @@ class Zelda(Game):
         unique_levels = list(set(playable_levels))
 
         metrics = {}
-        metrics["Final Duplication Ratio"] = 1 - \
+        metrics["Final Duplication Rate"] = 1 - \
             len(unique_levels) / len(playable_levels)
         metrics["Hamming Distance"] = total_hamming_dist / n
-        metrics["90%% duplication Rate"] = dup90 / n
-        metrics["Object Duplication Ratio"] = total_object_duplication / n
-        metrics["Key Duplication Ratio"] = key_duplication / n
-        metrics["Goal Duplication Ratio"] = goal_duplication / n
-        metrics["Player Duplication Ratio"] = player_duplication / n
-        print("Duplication Ratio:", 1 - len(unique_levels) / len(playable_levels))
+        metrics[r"90% duplication Rate"] = dup90 / n
+        metrics["Object Duplication Rate"] = total_object_duplication / n
+        metrics["Key Duplication Rate"] = key_duplication / n
+        metrics["Goal Duplication Rate"] = goal_duplication / n
+        metrics["Player Duplication Rate"] = player_duplication / n
+        print("Duplication Rate:", 1 - len(unique_levels) / len(playable_levels))
         print("Hamming Distance:", total_hamming_dist / n)
-        print("Obj Duplication ratio:", total_object_duplication / n)
+        print("Obj Duplication Rate:", total_object_duplication / n)
 
         n_w, n_f, n_e, n = 0, 0, 0, 0
         vw, vf, ve = [], [], []

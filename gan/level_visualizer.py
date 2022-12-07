@@ -27,7 +27,7 @@ class MarioLevelVisualizer:
             ret[c] = sprite
         return ret
 
-    def draw_level(self, level_str):
+    def draw_level(self, level_str):  # , visited):
         lvl_rows = level_str.split()
         w = len(lvl_rows[0])
         h = len(lvl_rows)
@@ -38,6 +38,8 @@ class MarioLevelVisualizer:
         for y, r in enumerate(lvl_rows):
             for x, c in enumerate(r):
                 img = self.char_to_img[c]
+                # if visited[y][x]:
+                #     img = img.point(lambda x: x + 150)
                 lvl_img.paste(
                     img, (p + x * ts, p + y * ts, p +
                           (x + 1) * ts, p + (y + 1) * ts)

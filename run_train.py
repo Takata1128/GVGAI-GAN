@@ -51,7 +51,44 @@ if __name__ == "__main__":
         }
         return models_dict
 
-    # simple
+    # game = Mario('mario', 'v0')
+    # config = cfg.MarioConfig()
+    # config.latent_size = 32
+    # config.seed = 0
+    # config.set_env(game)
+    # config.use_self_attention_d = False
+    # config.use_self_attention_g = False
+    # # config.use_diversity_sampling = True
+    # # config.dataset_size = 10
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
+
+    # game = Zelda('zelda', 'v0')
+    # config = cfg.ZeldaConfig()
+    # config.latent_size = 32
+    # config.seed = 0
+    # config.set_env(game)
+    # config.adv_loss = 'wgan'
+    # config.bootstrap = 'baseline'
+    # config.div_loss = 'l1-hidden'
+    # config.lambda_div = 0.5
+    # config.use_self_attention_d = False
+    # config.use_self_attention_g = False
+    # config.use_diversity_sampling = False
+    # prepare_dataset(
+    #     game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    # device = torch.device(
+    #     f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    # models_dict = get_models(game, config, device)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
+
+    # # simple
     # for i in range(3):
     #     game = Mario('mario', 'v0')
     #     config = cfg.MarioConfig()
@@ -74,388 +111,23 @@ if __name__ == "__main__":
     #     models_dict = get_models(game, config, device)
     #     trainer = Trainer(game, models_dict, config)
     #     trainer.train()
-    # DCGAN
-    # conventional bootstrap
-    for i in range(3):
-        game = Zelda('zelda', 'v0')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
 
-    # L1
-    for i in range(3):
-        game = Zelda('zelda', 'v0')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = 'l1'
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # hamming filter
-    for i in range(3):
-        game = Zelda('zelda', 'v0')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'smart'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # diversity sampling
-    for i in range(3):
-        game = Zelda('zelda', 'v0')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = True
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # ours
-    for i in range(3):
-        game = Zelda('zelda', 'v0')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'smart'
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = True
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-        # DCGAN
-    # conventional bootstrap
-    for i in range(3):
-        game = Zelda('zelda', 'v1')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # L1
-    for i in range(3):
-        game = Zelda('zelda', 'v1')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = 'l1'
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # hamming filter
-    for i in range(3):
-        game = Zelda('zelda', 'v1')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'smart'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # diversity sampling
-    for i in range(3):
-        game = Zelda('zelda', 'v1')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = True
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # ours
-    for i in range(3):
-        game = Zelda('zelda', 'v1')
-        config = cfg.ZeldaConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'smart'
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = True
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # DCGAN
-    # conventional bootstrap
-    for i in range(3):
-        game = Mario('mario', 'v0')
-        config = cfg.MarioConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # L1
-    for i in range(3):
-        game = Mario('mario', 'v0')
-        config = cfg.MarioConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = 'l1'
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # hamming filter
-    for i in range(3):
-        game = Mario('mario', 'v0')
-        config = cfg.MarioConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'smart'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # # diversity sampling
+    # # simple
     # for i in range(3):
     #     game = Mario('mario', 'v0')
     #     config = cfg.MarioConfig()
     #     config.latent_size = 16
     #     config.seed = i
     #     config.set_env(game)
-    #     config.bootstrap = 'baseline'
+    #     config.bootstrap = None
     #     config.div_loss = None
     #     config.use_self_attention_d = False
     #     config.use_self_attention_g = False
-    #     config.use_diversity_sampling = True
+    #     config.use_diversity_sampling = False
+    #     config.adv_loss = 'wgan'
+    #     config.discrimianator_update_count = 5
     #     config.generator_lr = 0.0001
-    #     config.discriminator_lr = 0.0004
-    #     prepare_dataset(
-    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-    #     device = torch.device(
-    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-    #     models_dict = get_models(game, config, device)
-    #     trainer = Trainer(game, models_dict, config)
-    #     trainer.train()
-
-    # ours
-    for i in range(3):
-        game = Mario('mario', 'v0')
-        config = cfg.MarioConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'smart'
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        # config.use_diversity_sampling = True
-        config.generator_lr = 0.0001
-        config.discriminator_lr = 0.0004
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # DCGAN
-    # conventional bootstrap
-    for i in range(3):
-        game = Mario('mario', 'v0')
-        config = cfg.MarioConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        config.dataset_size = 10
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # L1
-    for i in range(3):
-        game = Mario('mario', 'v0')
-        config = cfg.MarioConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = 'l1'
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        config.dataset_size = 10
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # hamming filter
-    for i in range(3):
-        game = Mario('mario', 'v0')
-        config = cfg.MarioConfig()
-        config.latent_size = 32
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'smart'
-        config.div_loss = None
-        config.use_self_attention_d = False
-        config.use_self_attention_g = False
-        config.use_diversity_sampling = False
-        config.dataset_size = 10
-        prepare_dataset(
-            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-        device = torch.device(
-            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
-        models_dict = get_models(game, config, device)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    # # diversity sampling
-    # for i in range(3):
-    #     game = Mario('mario', 'v0')
-    #     config = cfg.MarioConfig()
-    #     config.latent_size = 16
-    #     config.seed = i
-    #     config.set_env(game)
-    #     config.bootstrap = 'baseline'
-    #     config.div_loss = None
-    #     config.use_self_attention_d = False
-    #     config.use_self_attention_g = False
-    #     config.use_diversity_sampling = True
-    #     config.generator_lr = 0.0001
-    #     config.discriminator_lr = 0.0004
+    #     config.discriminator_lr = 0.0001
     #     config.dataset_size = 10
     #     prepare_dataset(
     #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
@@ -465,17 +137,631 @@ if __name__ == "__main__":
     #     trainer = Trainer(game, models_dict, config)
     #     trainer.train()
 
+    # # DCGAN
+    # # conventional bootstrap
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v0')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'baseline'
+    #     config.div_loss = None
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = False
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # L1
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v0')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'baseline'
+    #     config.div_loss = 'l1'
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = False
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # hamming filter
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v0')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'smart'
+    #     config.div_loss = None
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = False
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # diversity sampling
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v0')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'baseline'
+    #     config.div_loss = None
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = True
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # ours
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v0')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'smart'
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = True
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # DCGAN
+    # # conventional bootstrap
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v1')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'baseline'
+    #     config.div_loss = None
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = False
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # L1
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v1')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'baseline'
+    #     config.div_loss = 'l1'
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = False
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # hamming filter
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v1')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'smart'
+    #     config.div_loss = None
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = False
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # diversity sampling
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v1')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'baseline'
+    #     config.div_loss = None
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = True
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # # ours
+    # for i in range(3):
+    #     game = Zelda('zelda', 'v1')
+    #     config = cfg.ZeldaConfig()
+    #     config.latent_size = 32
+    #     config.seed = i
+    #     config.set_env(game)
+    #     config.bootstrap = 'smart'
+    #     config.use_self_attention_d = False
+    #     config.use_self_attention_g = False
+    #     config.use_diversity_sampling = True
+    #     prepare_dataset(
+    #         game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+    #     device = torch.device(
+    #         f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    #     models_dict = get_models(game, config, device)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # DCGAN
+    # conventional bootstrap
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # L1
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'baseline'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # hamming filter
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'smart'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # diversity sampling
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
     # ours
     for i in range(3):
         game = Mario('mario', 'v0')
         config = cfg.MarioConfig()
-        config.latent_size = 16
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'smart'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # DCGAN
+    # conventional bootstrap
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # L1
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'baseline'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # hamming filter
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'smart'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # diversity sampling
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # ours
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.adv_loss = 'wgan'
+        config.lambda_div = 0.5
+        config.discrimianator_update_count = 5
+        config.discriminator_lr = 0.0001
+        config.bootstrap = 'smart'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # DCGAN
+    # conventional bootstrap
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # L1
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'baseline'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # hamming filter
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
         config.seed = i
         config.set_env(game)
         config.bootstrap = 'smart'
+        config.div_loss = None
         config.use_self_attention_d = False
         config.use_self_attention_g = False
-        # config.use_diversity_sampling = True
+        config.use_diversity_sampling = False
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # diversity sampling
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # ours
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'smart'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # DCGAN
+    # conventional bootstrap
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # L1
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'baseline'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # hamming filter
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'smart'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = False
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # diversity sampling
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'baseline'
+        config.div_loss = None
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
+        config.dataset_size = 10
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+        device = torch.device(
+            f'cuda:{config.gpu_id}' if torch.cuda.is_available() else 'cpu')
+        models_dict = get_models(game, config, device)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    # ours
+    for i in range(3):
+        game = Mario('mario', 'v0')
+        config = cfg.MarioConfig()
+        config.seed = i
+        config.set_env(game)
+        config.bootstrap = 'smart'
+        config.div_loss = 'l1'
+        config.use_self_attention_d = False
+        config.use_self_attention_g = False
+        config.use_diversity_sampling = True
         config.dataset_size = 10
         prepare_dataset(
             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)

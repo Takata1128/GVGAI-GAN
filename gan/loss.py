@@ -1,3 +1,4 @@
+from __future__ import annotations
 import torch
 import torch.nn as nn
 from gan.game.env import Game
@@ -30,9 +31,13 @@ def g_loss(fake_logits: torch.Tensor):
     return generator_loss
 
 
-def div_loss(latent: torch.Tensor, fake: torch.Tensor, loss_type: str, lambda_div=1.0, game: Game = None):
+def div_loss(latent: torch.Tensor, fake: torch.Tensor, hiddens: list[torch.Tensor], loss_type: str, lambda_div=1.0, game: Game = None):
     if loss_type == "l1":
         return -torch.abs(fake[1:, :, :game.height, :game.width] - fake[:-1, :, :game.height, :game.width]).mean() * lambda_div
+    elif loss_type == 'l1-hidden':
+        return -torch.abs(hiddens[1][1:] - hiddens[1][:-1]).mean() * lambda_div
+    elif loss_type == 'l1-hidden-latent':
+        return -torch.abs(hiddens[1][1:] - hiddens[1][:-1]).mean() / torch.abs(latent[1:] - latent[:-1]).mean() * lambda_div
     elif loss_type == 'l1-latent':
         return -(torch.abs(fake[1:, :, :game.height, :game.width] - fake[:-1, :, :game.height, :game.width]).mean() / torch.abs(latent[1:, :, :game.height, :game.width] - latent[:-1, :, :game.height, :game.width]).mean()) * lambda_div
     elif loss_type == "l2":

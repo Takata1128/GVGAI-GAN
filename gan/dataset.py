@@ -111,14 +111,14 @@ class LevelDataset(Dataset):
         level = level.split()
         level_numpy = np.zeros(self.game.input_shape)
         # padding
-        level_numpy[1, :, :] = 1
+        level_numpy[self.game.padding_index, :, :] = 1
         # label : onehot vector of counts of map tile object.
         label_numpy = np.zeros(len(self.game.ascii))
         for i, s in enumerate(level):
             for j, c in enumerate(s):
                 if c == "\n":
                     break
-                level_numpy[1, i, j] = 0
+                level_numpy[self.game.padding_index, i, j] = 0
                 level_numpy[self.game.ascii.index(c), i, j] = 1
                 label_numpy[self.game.ascii.index(c)] += 1
         return torch.tensor(level_numpy), torch.tensor(label_numpy)
