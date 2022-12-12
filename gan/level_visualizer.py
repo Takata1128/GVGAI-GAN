@@ -52,14 +52,11 @@ class GVGAILevelVisualizer:
         self.game = env
         self.tile_size = tile_size
         self.dir = gym_gvgai.dir
-
-        self.ascii_mapping = self.game.ascii_to_tile
         self.pad = padding
         self.game_description = self.read_gamefile()
         self.sprite_paths = self.sprite_mapping()
         self.level_mapping = self.game.char_to_tile
         self.tiles = self.build_tiles()
-        self.ascii_tiles = self.build_ascii_tiles()
 
     def read_gamefile(self):
         path = os.path.join(
@@ -72,12 +69,6 @@ class GVGAILevelVisualizer:
     def get_indent(self, string):
         string = string.replace("\t", "        ")
         return len(string) - len(string.lstrip())
-
-    def remove_comment(self, string):
-        if "#" in string:
-            comment_idx = string.index("#")
-            return string[:comment_idx]
-        return string
 
     def sprite_mapping(self):
         sprite_set = False
@@ -99,25 +90,6 @@ class GVGAILevelVisualizer:
                 sprite_set = True
                 indent = self.get_indent(l)
         return sprites
-
-    def ascii_map(self):
-        level_mapping = False
-        mapping = {}
-        for l in self.game_description:
-            line = self.remove_comment(l).split()
-            if len(line) == 0:
-                pass
-            elif level_mapping:
-                if indent >= self.get_indent(l):
-                    level_mapping = False
-                elif line[1] == ">":
-                    key = line[0]
-                    tile = line[2:]
-                    mapping[key] = tile
-            elif line[0] == "LevelMapping":
-                level_mapping = True
-                indent = self.get_indent(l)
-        return mapping
 
     def get_sprite(self, name, alias=0):
         sprite = os.path.basename(self.sprite_paths[name])
@@ -157,40 +129,6 @@ class GVGAILevelVisualizer:
             tile = self._build_tile(k, sprite_list)
             lvl_tiles[k] = tile
         return lvl_tiles
-
-    def build_ascii_tiles(self):
-        if self.ascii_mapping is None:
-            return None
-        ret = {}
-        for k, l in self.ascii_mapping.items():
-            ret[k] = self._build_tile("@" if k == "" else k[0], l)
-        return ret
-
-    def draw_level_ascii(self, ascii_level_str):
-        lvl_rows = []
-        tmp = ascii_level_str.split("\n")
-        h = len(tmp)
-        for i in range(h):
-            lvl_rows.append(tmp[i].split(","))
-        w = len(lvl_rows[0])
-        ts = self.tile_size
-        p = self.pad
-        lvl_img = Image.new(
-            "RGB", (w * ts + 2 * p, h * ts + 2 * p), (255, 255, 255))
-
-        for y, r in enumerate(lvl_rows):
-            for x, c in enumerate(r):
-                if " " in c:
-                    img = self._build_tile("@", c.split(" "))
-                else:
-                    img = self.ascii_tiles[c]
-                lvl_img.paste(
-                    img,
-                    (p + x * ts, p + y * ts, p +
-                        (x + 1) * ts, p + (y + 1) * ts),
-                )
-
-        return lvl_img
 
     def draw_level(self, level_str):
         lvl_rows = level_str.split()

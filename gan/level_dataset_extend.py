@@ -120,25 +120,29 @@ def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True, dataset_siz
     if dataset_size:
         lvl_strs = lvl_strs[:dataset_size]
 
-    for j in range(len(lvl_strs) if not dataset_size else dataset_size):
+    for j in range(len(lvl_strs)):
         index = j % len(lvl_strs)
         lvl_str = lvl_strs[index]
         lvl_str = lvl_str.split()
-        target_shape = game.model_shape[-1]
+        target_shape = game.input_shape[1:]
 
         # PADDING
         for i in range(target_shape[0]):
             s = ''
+
+            # 補填
             if i < len(lvl_str):
                 s = lvl_str[i]
-            width = len(s)
-            for _ in range(target_shape[1] - width):
+            for _ in range(target_shape[1] - len(s)):
                 s += game.ascii[game.padding_index]
+
+            # 差し替え
             if i < len(lvl_str):
                 lvl_str[i] = s
             else:
                 lvl_str.append(s)
 
+        # 一行に
         lvl_str = "\n".join(lvl_str)
 
         if extend_data:

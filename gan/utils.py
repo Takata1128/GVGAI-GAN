@@ -313,7 +313,7 @@ def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: Ga
 
     # correct nearest centers
     for center in kmeans.cluster_centers_:
-        dist = 1000
+        dist = 100000
         index = -1
         for i, lr in enumerate(levels_reduced):
             dist_tmp = (center[0] - lr[0])**2 + (center[1] - lr[1])**2

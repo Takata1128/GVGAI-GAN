@@ -36,8 +36,8 @@ class LevelDataset(Dataset):
         for path in self.level_paths:
             with open(path, 'r') as f:
                 level = f.read()
-            features = self.game.get_property(level)
-            level_tensor, label_tensor = self.to_tensor(level)
+            features = self.game.get_features(level)
+            level_tensor, label_tensor = self.game.level_str_to_tensor(level)
             item = LevelItem(level_tensor, label_tensor, level, features)
             if features in self.feature2indices:
                 self.feature2indices[features].append(len(self.data))
@@ -52,7 +52,7 @@ class LevelDataset(Dataset):
 
     def add_data(self, level, features):
         index = self.data_length
-        level_tensor, label_tensor = self.to_tensor(level)
+        level_tensor, label_tensor = self.game.level_str_to_tensor(level)
         item = LevelItem(level_tensor, label_tensor, level, features)
         if features in self.feature2indices:
             self.feature2indices[features].append(index)
@@ -60,27 +60,6 @@ class LevelDataset(Dataset):
             self.feature2indices[features] = [index]
         self.data.append(item)
         self.data_length = len(self.data)
-
-    # def update(self):
-    #     '''
-    #     datasetの更新
-    #     後に作ったレベルのファイル名が辞書順で後ろになることを仮定
-    #     '''
-
-    #     for index in range(self.data_length, len(self.level_paths)):
-    #         path = self.level_paths[index]
-    #         with open(path, 'r') as f:
-    #             level = f.read()
-    #         features = self.game.get_property(level)
-    #         level_tensor, label_tensor = self.to_tensor(level)
-    #         item = LevelItem(level_tensor, label_tensor, level, features)
-    #         if features in self.feature2indices:
-    #             self.feature2indices[features].append(index)
-    #         else:
-    #             self.feature2indices[features] = [index]
-    #         self.data.append(item)
-
-    #     self.data_length = len(self.data)
 
     def sample(self, batch_size: int):
         latent_batch = torch.zeros((batch_size, self.latent_size))
@@ -106,22 +85,6 @@ class LevelDataset(Dataset):
         #     print(f'{key} : {value}', end=', ')
         # print()
         return latent_batch, level_batch, label_batch
-
-    def to_tensor(self, level: str):
-        level = level.split()
-        level_numpy = np.zeros(self.game.input_shape)
-        # padding
-        level_numpy[self.game.padding_index, :, :] = 1
-        # label : onehot vector of counts of map tile object.
-        label_numpy = np.zeros(len(self.game.ascii))
-        for i, s in enumerate(level):
-            for j, c in enumerate(s):
-                if c == "\n":
-                    break
-                level_numpy[self.game.padding_index, i, j] = 0
-                level_numpy[self.game.ascii.index(c), i, j] = 1
-                label_numpy[self.game.ascii.index(c)] += 1
-        return torch.tensor(level_numpy), torch.tensor(label_numpy)
 
 
 class LevelDatasetOld(Dataset):

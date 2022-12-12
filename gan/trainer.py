@@ -1,6 +1,5 @@
 from __future__ import annotations
 import wandb
-from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 import torchvision.transforms as transforms
 import os
@@ -13,7 +12,7 @@ import shutil
 from . import loss
 from .game.env import Game
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
-from .dataset import LevelDataset, LevelDatasetOld
+from .dataset import LevelDataset
 from .level_dataset_extend import prepare_dataset
 from .config import DataExtendConfig, BaseConfig
 from .utils import (
@@ -44,6 +43,9 @@ class Trainer:
             print("device : cpu")
 
         # Dataset
+        prepare_dataset(
+            game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+
         self.dataset = LevelDataset(
             config.level_data_path,
             self.game,
@@ -186,7 +188,7 @@ class Trainer:
                         playable_levels.append(level_str)
                 wandb.log(
                     {
-                        "Playable Ratio": len(playable_levels)
+                        "Playable Rate": len(playable_levels)
                         / self.config.eval_playable_counts
                     }, step=self.step
                 )
@@ -244,18 +246,15 @@ class Trainer:
 
     def _generate_levels(self, latents, labels):
         level_tensor, _ = self.generator(latents, labels)
-        p_level = torch.softmax(
-            level_tensor, dim=1)
-        level_strs = self.game.level_tensor_to_strs(p_level)
+        level_strs = self.game.level_tensor_to_strs(
+            level_tensor)
         return level_strs
 
     def _save_images(self):
         level_tensor, _ = self.generator(
             self.latents_for_show, self.labels_for_show)
-        p_level = torch.nn.Softmax2d()(
-            level_tensor)
         level_strs = self.game.level_tensor_to_strs(
-            p_level[:, :, :self.game.map_shape[0], :self.game.map_shape[1]])
+            level_tensor)
         # playables = [self.game.check_playable(level) for level in level_strs]
         # visited_maps = [self.game.check_reachable(
         #     level.split())[1] for level in level_strs]
@@ -326,8 +325,8 @@ class Trainer:
             duplication_rate,
         ) = self._calc_level_similarity(level_strs)
 
-        wandb.log({"Level Similarity Ratio": level_similarity}, self.step)
-        wandb.log({"Duplicate Ratio": duplication_rate}, self.step)
+        wandb.log({"Level Similarity Rate": level_similarity}, self.step)
+        wandb.log({"Duplication Rate": duplication_rate}, self.step)
 
         if len(playable_levels) > self.max_playable_count:
             self.max_playable_count = len(playable_levels)
@@ -369,7 +368,7 @@ class Trainer:
             if self.config.bootstrap_property_filter is not None:
                 tmp_levels = []
                 for level_str in filtered_levels:
-                    features = self.game.get_property(level_str)
+                    features = self.game.get_features(level_str)
                     ok = True
                     for i, pd in enumerate(self.dataset_properties_dicts):
                         if (features[i] in pd) and (pd[features[i]] >= self.dataset.data_length * self.config.bootstrap_property_filter):
@@ -425,7 +424,7 @@ class Trainer:
             "w",
         ) as f:
             f.write(level_str)
-            feature = self.game.get_property(level_str)
+            feature = self.game.get_features(level_str)
             self.dataset.add_data(level_str, feature)
             for i, pd in enumerate(self.dataset_properties_dicts):
                 if feature[i] in pd:
@@ -442,14 +441,14 @@ class Trainer:
             real_logits, real_recon = self.discriminator(
                 real_images_logit, label)
             fake_logits, _ = self.discriminator(
-                torch.softmax(fake_images_logit, dim=1).detach(), label)
+                fake_images_logit.detach(), label)
             real_logits, fake_logits = real_logits.view(
                 -1), fake_logits.view(-1)
         else:
             real_logits = self.discriminator(
                 real_images_logit, label).view(-1)
             fake_logits = self.discriminator(
-                torch.softmax(fake_images_logit, dim=1).detach(), label).view(-1)
+                fake_images_logit.detach(), label).view(-1)
 
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
@@ -507,17 +506,17 @@ class Trainer:
 
         return D_x, D_G_z, discriminator_loss.item(), recon_loss_item
 
-    def _generator_update(self, latent: torch.Tensor, fake_images_logit: torch.Tensor, label: torch.Tensor = None, hiddens: torch.Tensor = None):
+    def _generator_update(self, latent: torch.Tensor, fake_images: torch.Tensor, label: torch.Tensor = None, hiddens: torch.Tensor = None):
         """
         update generator: maximize log(D(G(z)))
         """
         self.generator.zero_grad()
         if self.config.use_recon_loss:
             fake_logits = self.discriminator(
-                torch.softmax(fake_images_logit, dim=1), label)[0].view(-1)
+                fake_images, label)[0].view(-1)
         else:
             fake_logits = self.discriminator(
-                torch.softmax(fake_images_logit, dim=1), label).view(-1)
+                fake_images, label).view(-1)
         if self.config.adv_loss == "baseline":
             generator_loss = loss.g_loss(fake_logits)
         elif self.config.adv_loss == "hinge":
@@ -530,13 +529,12 @@ class Trainer:
             generator_loss = loss.g_loss_lsgan(fake_logits)
         else:
             raise NotImplementedError()
-
         div_loss = loss.div_loss(
-            latent, torch.softmax(fake_images_logit, dim=1), hiddens, self.config.div_loss, self.config.lambda_div, self.game)
-        # if self.playability > 0.0:
+            latent, fake_images, hiddens, self.config.div_loss, self.config.lambda_div, self.game)
         generator_loss += div_loss
         generator_loss.backward()
         self.optimizer_g.step()
+
         return generator_loss.item(), div_loss.item()
 
     def _save_models(self, model_save_dir: str, epoch: int, playable_count: int):
@@ -604,9 +602,9 @@ class Trainer:
             if self.game.check_playable(level_str):
                 playable_levels.append(level_str)
 
-        metrics["Final Playable Ratio"] = len(
+        metrics["Final Playable Rate"] = len(
             playable_levels) / self.config.final_evaluation_levels
-        print("Playable Ratio:", len(playable_levels) /
+        print("Playable Rate:", len(playable_levels) /
               self.config.final_evaluation_levels)
         wandb.log(metrics)
 
@@ -619,7 +617,7 @@ class Trainer:
             level_str = ''
             with open(path, mode='r') as f:
                 level_str = f.read()
-            property = self.game.get_property(level_str)
+            property = self.game.get_features(level_str)
             # ret[property] += 1
             for i, p in enumerate(property):
                 if i >= len(ret):

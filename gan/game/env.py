@@ -10,30 +10,11 @@ import os
 GameDescription = {}
 GameDescription["aliens"] = {
     "ascii": [".", "0", "1", "2", "A"],
-    'ascii_to_tile': {
-        "background": ["background"],
-        "base": ["background", "base"],
-        "portalSlow": ["background", "portalSlow"],
-        "portalFast": ["background", "portalFast"],
-        "avatar": ["background", "avatar"]
-    },
     "state_shape": (5, 12, 32),
     "model_shape": [(3, 4), (6, 8), (12, 16), (12, 32)],
 }
 GameDescription["zelda_v1"] = {
     "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
-    "ascii_to_tile": {
-        "": ["floor"],
-        "wall": ["wall"],
-        "goal": ["floor", "goal"],
-        "key": ["floor", "key"],
-        "sword": ["floor", "sword"],
-        "monsterQuick": ["floor", "monsterQuick"],
-        "monsterNormal": ["floor", "monsterNormal"],
-        "monsterSlow": ["floor", "monsterSlow"],
-        "nokey": ["floor", "nokey"],
-        "withkey": ["floor", "withkey"],
-    },
     'char_to_tile': {
         '.': ['floor'],
         'w': ['wall'],
@@ -50,18 +31,6 @@ GameDescription["zelda_v1"] = {
 }
 GameDescription["zelda_v0"] = {
     "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
-    "ascii_to_tile": {
-        "": ["floor"],
-        "wall": ["wall"],
-        "goal": ["floor", "goal"],
-        "key": ["floor", "key"],
-        "sword": ["floor", "sword"],
-        "monsterQuick": ["floor", "monsterQuick"],
-        "monsterNormal": ["floor", "monsterNormal"],
-        "monsterSlow": ["floor", "monsterSlow"],
-        "nokey": ["floor", "nokey"],
-        "withkey": ["floor", "withkey"],
-    },
     'char_to_tile': {
         '.': ['floor'],
         'w': ['wall'],
@@ -76,30 +45,9 @@ GameDescription["zelda_v0"] = {
     "map_shape": (9, 13),
     "model_shape": [(3, 4), (6, 8), (12, 16)],
 }
-GameDescription["mario_v0"] = {
-    "ascii": ["X", 'S', '-', "Q", "E", "<", ">", "[", "]", "?"],
-    "state_shape": (10, 32, 32),
-    "map_shape": (14, 28),
-    "model_shape": [(4, 4), (8, 8), (16, 16), (32, 32)],
-    "ascii_to_tile": None,
-}
 
-GameDescription["roguelike"] = {
+GameDescription["roguelike_v0"] = {
     "ascii": [".", 'w', "x", "s", "g", "r", "p", "h", "k", 'l', 'm', 'A'],
-    "ascii_to_tile": {
-        "": ["floor"],
-        'wall': ['wall'],
-        "exit": ["floor", "exit"],
-        "weapon": ["floor", 'weapon'],
-        "gold": ["floor", 'gold'],
-        "spider": ["floor", "spider"],
-        "phantom": ["floor", "phantom"],
-        "health": ["floor", "health"],
-        "key": ["floor", "key"],
-        "lock": ["floor", "lock"],
-        "market": ["floor", "market"],
-        "avatar": ["floor", "avatar"],
-    },
     'char_to_tile': {
         '.': ['floor'],
         'w': ['wall'],
@@ -114,17 +62,32 @@ GameDescription["roguelike"] = {
         'm': ["floor", "market"],
         'A': ["floor", "avatar"],
     },
-    "state_shape": (12, 24, 24),
+    "state_shape": (12, 32, 32),
     "map_shape": (22, 23),
-    "model_shape": [(6, 6), (12, 12), (24, 24)],
 }
 
+GameDescription["boulderdash_v0"] = {
+    "ascii": ['w', ".", '-', "e", "o", "x", "c", "b", "A"],
+    'char_to_tile': {
+        'w': ['wall'],
+        '.': ['background', 'dirt'],
+        '-': ['background'],
+        'e': ["background", "exitdoor"],
+        'o': ["background", 'boulder'],
+        'x': ["background", 'diamond'],
+        'c': ["background", "crab"],
+        'b': ["background", "butterfly"],
+        'A': ["background", "avatar"],
+    },
+    "state_shape": (9, 32, 32),
+    "map_shape": (13, 26),
+}
 
-map_shapes = {
-    'mario_v0': [14, 28],
-    'zelda_v0': [9, 13],
-    'zelda_v1': [12, 16],
-    'rogue_v0': [22, 23],
+GameDescription["mario_v0"] = {
+    "ascii": ["X", 'S', '-', "Q", "E", "<", ">", "[", "]", "?"],
+    "state_shape": (10, 32, 32),
+    "map_shape": (14, 28),
+    "ascii_to_tile": None,
 }
 
 
@@ -136,8 +99,6 @@ class Game(metaclass=ABCMeta):
             self.ascii = GameDescription[f'{name}_{version}']["ascii"]
             self.input_shape = GameDescription[f'{name}_{version}']["state_shape"]
             self.map_shape = GameDescription[f'{name}_{version}']["map_shape"]
-            self.model_shape = GameDescription[f'{name}_{version}']["model_shape"]
-            self.ascii_to_tile = GameDescription[f'{name}_{version}']["ascii_to_tile"]
         except:
             raise Exception(f'{name}_{version}' +
                             " data not implemented in env.py")
@@ -169,38 +130,53 @@ class Game(metaclass=ABCMeta):
                 levels.append(content)
             return levels
 
-    # def level_str_to_ndarray(self, lvl_str: str):
-    #     ret = np.zeros(
-    #         (len(self.ascii),
-    #          self.input_shape[1], self.input_shape[2]),
-    #     )
-    #     index = 0
-    #     for i, c in enumerate(lvl_str):
-    #         if c == "\n":
-    #             continue
-    #         ret[self.ascii.index(c), index // self.input_shape[2],
-    #             index % self.input_shape[2]] = 1
-    #         index += 1
-    #     return ret
+    def level_str_to_tensor(self, level: str):
+        level = level.split()
+        level_numpy = np.zeros(self.input_shape)
+        # padding
+        level_numpy[self.padding_index, :, :] = 1
+        # label : onehot vector of counts of map tile object.
+        label_numpy = np.zeros(len(self.ascii))
+        for i, s in enumerate(level):
+            for j, c in enumerate(s):
+                if c == "\n":
+                    break
+                level_numpy[self.padding_index, i, j] = 0
+                level_numpy[self.ascii.index(c), i, j] = 1
+                label_numpy[self.ascii.index(c)] += 1
+        return torch.tensor(level_numpy), torch.tensor(label_numpy)
 
     def level_tensor_to_strs(self, tensor: torch.tensor):
-        lvl_array = tensor.argmax(dim=1).cpu().numpy()
+        lvl_array = tensor[:, :, :self.map_shape[0],
+                           :self.map_shape[1]].argmax(dim=1).cpu().numpy()
         lvls = self.map_level(lvl_array).tolist()
         lvl_strs = ["\n".join(["".join(row) for row in lvl]) for lvl in lvls]
         return lvl_strs
 
     @abstractmethod
-    def get_property(self, level_str: str):
+    def get_features(self, level_str: str):
+        '''
+        diversity samplingのための特徴抽出
+        '''
         pass
 
     @abstractmethod
     def evaluation(self, playable_levels: list[str]):
+        '''
+        学習完了後の評価
+        '''
         pass
 
     @abstractmethod
     def check_playable(self, lvl_str: str):
+        '''
+        プレイアビリティのチェック
+        '''
         pass
 
     @abstractmethod
     def check_similarity(self, level1: str, level2: str):
+        '''
+        ペアの類似度チェック
+        '''
         pass

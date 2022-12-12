@@ -4,8 +4,8 @@ from collections import deque
 
 
 class Zelda(Game):
-    def __init__(self, name, version):
-        super().__init__(name, version)
+    def __init__(self, version):
+        super().__init__('zelda', version)
         if version == 'v0':
             self.height = 9
             self.width = 13
@@ -20,8 +20,8 @@ class Zelda(Game):
         kx, ky = -1, -1
         countA, countG, countK = 0, 0, 0
         ok = True
-        for i in range(len(g)):
-            for j in range(len(g[0])):
+        for i in range(self.height):
+            for j in range(self.width):
                 if (i == 0 or i >= self.height - 1 or j == 0 or j >= self.width - 1) and g[i][j] != "w":
                     ok = False
                 if g[i][j] == "A":
@@ -73,7 +73,7 @@ class Zelda(Game):
                 n += 1
         return hit / n
 
-    def get_property(self, level: str):
+    def get_features(self, level: str):
         index_agent, index_key, index_goal = 0, 0, 0
         for i, c in enumerate(level):
             if c == 'A':

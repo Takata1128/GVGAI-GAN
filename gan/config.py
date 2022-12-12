@@ -18,29 +18,31 @@ class BaseConfig:
     generator_filters: int = 128
     discriminator_filters: int = 128
     # field(default_factory=lambda: [1, 2])
-    use_self_attention_g: list[int] = False
+    use_self_attention_g: bool = False
     # field(default_factory=lambda: [0, 1])
-    use_self_attention_d: list[int] = False
-    use_linear4z2features_g: bool = False
-    use_deconv_g: bool = True
-    use_bn_d: bool = False
-    use_sn_d: bool = False
-    use_pooling_d: bool = False
-    use_minibatch_std: bool = False
-    use_spectral_norm: bool = False
-    use_conditional: bool = False
+    use_self_attention_d: bool = False
+    use_spectral_norm_d: bool = False
+
+    # use_linear4z2features_g: bool = False
+    # use_deconv_g: bool = True
+    # use_bn_d: bool = False
+    # use_sn_d: bool = False
+    # use_pooling_d: bool = False
+    # use_minibatch_std: bool = False
+    # use_spectral_norm: bool = False
+    # use_conditional: bool = False
 
     # learning parameters
-    discrimianator_update_count: int = 1
     adv_loss: str = "hinge"  # ["baseline","hinge"]
     div_loss: str = "l1"  # ["l1","l2","none"]
     lambda_div: float = 50.0
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
     use_gradient_penalty: bool = False
-    gp_lambda: float = 1.0
-    generator_lr: float = 0.00005
-    discriminator_lr: float = 0.00005
+    gp_lambda: float = 10.0
+    generator_lr: float = 0.0001
+    discriminator_lr: float = 0.0001
+    discrimianator_update_count: int = 1
     train_batch_size: int = 32  # training batch size
     steps: int = 10000 * (train_batch_size // 32)  # training steps
     dataset_size: int = 100
@@ -198,7 +200,7 @@ class MarioConfig(BaseConfig):
     save_image_epoch: int = 100
     save_model_epoch: int = 1000
     eval_epoch: int = 100
-    bootstrap_epoch: int = 10
+    bootstrap_epoch: int = 25
     dataset_size: int = 174
 
     use_recon_loss: bool = False
@@ -253,3 +255,43 @@ class ZeldaConfig(BaseConfig):
 
     generator_lr: float = 0.0001
     discriminator_lr: float = 0.0001
+
+
+@dataclass
+class BoulderdashConfig(BaseConfig):
+    dataset_type: str = "train"  # [train, generated]
+
+    # model define
+    latent_size: int = 32  # latent dims for generation
+    generator_filters: int = 64
+    discriminator_filters: int = 64
+    use_self_attention_g: list[int] = None
+    use_self_attention_d: list[int] = None
+    use_linear4z2features_g: bool = False
+
+    # learning parameters
+    adv_loss: str = "hinge"
+    discrimianator_update_count: int = 1
+    div_loss: str = "l1"
+    lambda_div: float = 50.0
+    bootstrap: str = "smart"
+    bootstrap_hamming_filter: float = 0.90
+    bootstrap_property_filter: float = None
+    bootstrap_kmeans_filter: bool = True
+    bootstrap_max_count: int = 10
+    use_diversity_sampling: bool = True
+
+    dataset_size: int = 5
+    train_batch_size: int = 32  # training batch size
+    steps: int = 5000  # training steps
+
+    save_image_epoch: int = 100
+    save_model_epoch: int = 1000
+    eval_epoch: int = 100
+    bootstrap_epoch: int = 10
+
+    use_recon_loss: bool = False
+    recon_lambda: float = 1.0
+
+    generator_lr: float = 0.0001
+    discriminator_lr: float = 0.0004

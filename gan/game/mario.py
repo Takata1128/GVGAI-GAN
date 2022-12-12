@@ -7,29 +7,73 @@ TILE_TYPE_THRESHOLD = 3
 
 
 class Mario(Game):
-    def __init__(self, name, version):
-        super().__init__(name, version)
+    def __init__(self):
+        super().__init__('mario', 'v0')
         self.height = 14
         self.width = 28
         self.padding_index = 0
 
     def check_playable(self, lvl_str: str):
         g = lvl_str.split()
-        ok = True
-
-        if not ok:
+        if not self._check_pipe(g):
             return False
 
-        tile_dict = {}
+        if not self._check_teritory(g):
+            return False
 
-        # 土管のチェック
+        if not self._check_tile_balance(g):
+            return False
+
+        ok, _ = self._check_reachable(g)
+        if not ok:
+            return False
+        return ok
+
+    def _check_teritory(self, g: list[str]):
+        '''
+        領域が複数あるかどうかチェック
+        '''
+        filled = [[0 for _ in range(self.width)] for _ in range(self.height)]
+        sx, sy = -1, -1
         for i, row in enumerate(g[:self.height]):
             for j, c in enumerate(row[:self.width]):
-                if c in tile_dict:
-                    tile_dict[c] += 1
-                else:
-                    tile_dict[c] = 1
+                if c == '-':
+                    sx, sy = i, j
+                    break
+            if sx != -1:
+                break
 
+        if sx == -1:
+            return False
+
+        que = deque()
+        filled[sx][sy] = 1
+        que.append((sx, sy))
+        dir = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+        while que:
+            current_x, current_y = que.popleft()
+            for dx, dy in dir:
+                nx, ny = current_x + dx, current_y + dy
+                if not (0 <= nx < self.height and 0 <= ny < self.width) or (g[nx][ny] not in ['-', 'E']):
+                    continue
+                if filled[nx][ny] == 0:
+                    filled[nx][ny] = 1
+                    que.append((nx, ny))
+
+        ok = True
+        for i in range(self.height):
+            for j in range(self.width):
+                if g[i][j] == '-' and filled[i][j] == 0:
+                    ok = False
+        return ok
+
+    def _check_pipe(self, g: list[str]):
+        '''
+        土管が壊れていないかチェック        
+        '''
+        ok = True
+        for i, row in enumerate(g[:self.height]):
+            for j, c in enumerate(row[:self.width]):
                 if c == '<':
                     if j != self.width - 1 and g[i][j + 1] != '>':
                         ok = False
@@ -54,7 +98,20 @@ class Mario(Game):
                         ok = False
                     if i != 0 and (g[i - 1][j] not in [']', '>']):
                         ok = False
+        return ok
 
+    def _check_tile_balance(self, g: list[str]):
+        '''
+        タイルの種類数と全体に占める割合をチェック
+        '''
+        tile_dict = {}
+        ok = True
+        for i, row in enumerate(g[:self.height]):
+            for j, c in enumerate(row[:self.width]):
+                if c in tile_dict:
+                    tile_dict[c] += 1
+                else:
+                    tile_dict[c] = 1
         for c, num in tile_dict.items():
             if c == '-':
                 continue
@@ -63,18 +120,12 @@ class Mario(Game):
 
         if len(tile_dict) < TILE_TYPE_THRESHOLD:
             ok = False
-
-        if not ok:
-            return False
-
-        reachable, _ = self.check_reachable(g)
-
-        if not reachable:
-            ok = False
-
         return ok
 
-    def check_reachable(self, g: list[str]):
+    def _check_reachable(self, g: list[str]):
+        '''
+        ゴールに到達できるかどうか
+        '''
         visited = [[0 for i in range(self.width)] for j in range(self.height)]
         que = deque()
         ok = False
@@ -175,7 +226,7 @@ class Mario(Game):
                 n += 1
         return hit / n
 
-    def get_property(self, level: str):
+    def get_features(self, level: str):
         g = level.split()
         num_pipe, num_hole = 0, 0
         for i in range(self.height):
@@ -184,7 +235,7 @@ class Mario(Game):
                     num_hole += 1
                 if g[i][j] == '<':
                     num_pipe += 1
-        return (num_pipe, num_hole)
+        return (num_pipe, num_hole // 3)
 
     def evaluation(self, playable_levels: list[str]):
         def check_level_hamming(level1: str, level2: str):

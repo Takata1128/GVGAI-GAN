@@ -32,8 +32,11 @@ def g_loss(fake_logits: torch.Tensor):
 
 
 def div_loss(latent: torch.Tensor, fake: torch.Tensor, hiddens: list[torch.Tensor], loss_type: str, lambda_div=1.0, game: Game = None):
+    first = fake[1:, :, :game.height, :game.width]
+    second = fake[:-1, :, :game.height, :game.width]
+
     if loss_type == "l1":
-        return -torch.abs(fake[1:, :, :game.height, :game.width] - fake[:-1, :, :game.height, :game.width]).mean() * lambda_div
+        return -torch.abs(first - second).mean() * lambda_div
     elif loss_type == 'l1-hidden':
         return -torch.abs(hiddens[1][1:] - hiddens[1][:-1]).mean() * lambda_div
     elif loss_type == 'l1-hidden-latent':
