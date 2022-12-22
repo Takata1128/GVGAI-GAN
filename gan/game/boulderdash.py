@@ -1,11 +1,12 @@
 from __future__ import annotations
 from .env import Game
 from collections import deque
+import wandb
 
 
 class Boulderdash(Game):
-    def __init__(self, name: str, version: str):
-        super().__init__(name, version)
+    def __init__(self):
+        super().__init__('boulderdash', 'v0')
         self.height = self.map_shape[0]
         self.width = self.map_shape[1]
         self.padding_index = 0
@@ -47,11 +48,16 @@ class Boulderdash(Game):
                 all = 1
             return g, a, all
 
-        key_duplication, goal_duplication, player_duplication, total_object_duplication, total_hamming_dist, dup90, n = 0, 0, 0, 0, 0, 0, 0
+        goal_duplication, player_duplication, total_object_duplication, total_hamming_dist, n = 0, 0, 0, 0, 0
         levels_small_set = playable_levels[:1000]
+        similarity_threshold_list = [0.60, 0.65,
+                                     0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
+        duplication_rate_list = [0 for i in range(
+            len(similarity_threshold_list))]
+
         for i in range(len(levels_small_set)):
             for j in range(len(levels_small_set)):
-                if i < j:
+                if i <= j:
                     continue
                 gd, pd, sod = check_level_object_duprecated(
                     levels_small_set[i], levels_small_set[j])
@@ -61,22 +67,29 @@ class Boulderdash(Game):
                 hamming = check_level_hamming(
                     levels_small_set[i], levels_small_set[j])
                 total_hamming_dist += hamming
-                if hamming / (self.height * self.width) <= 0.10:
-                    dup90 += 1
+                for k in range(len(similarity_threshold_list)):
+                    if hamming / (self.height * self.width) <= (1 - similarity_threshold_list[k]):
+                        duplication_rate_list[k] += 1
                 n += 1
 
-        unique_levels = list(set(playable_levels))
+        for i in range(len(duplication_rate_list)):
+            duplication_rate_list[i] /= n
 
+        unique_levels = list(set(playable_levels))
         metrics = {}
         metrics["Final Duplication Rate"] = 1 - \
             len(unique_levels) / len(playable_levels)
         metrics["Hamming Distance"] = total_hamming_dist / n
-        metrics[r"90% duplication Rate"] = dup90 / n
         metrics["Object Duplication Rate"] = total_object_duplication / n
-        metrics["Key Duplication Rate"] = key_duplication / n
         metrics["Goal Duplication Rate"] = goal_duplication / n
         metrics["Player Duplication Rate"] = player_duplication / n
-        print("Duplication Rate:", 1 - len(unique_levels) / len(playable_levels))
+        data = [[x, y] for (x, y) in zip(
+            similarity_threshold_list, duplication_rate_list)]
+        table = wandb.Table(data=data, columns=['rate', 'duplications'])
+        metrics[r'X% Duplication Rate'] = wandb.plot.line(
+            table, 'rate', 'duplications')
+        print("Final Duplication Rate:", 1 -
+              len(unique_levels) / len(playable_levels))
         print("Hamming Distance:", total_hamming_dist / n)
         print("Obj Duplication Rate:", total_object_duplication / n)
 
@@ -136,6 +149,8 @@ class Boulderdash(Game):
         return ok
 
     def check_similarity(self, level1: str, level2: str):
+        level1 = level1.split()
+        level2 = level2.split()
         n = 0
         hit = 0
         for i in range(self.height):

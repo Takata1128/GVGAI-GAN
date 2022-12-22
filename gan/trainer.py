@@ -7,6 +7,7 @@ import torch
 import numpy as np
 import random
 import shutil
+import statistics
 
 
 from . import loss
@@ -45,13 +46,27 @@ class Trainer:
         # Dataset
         prepare_dataset(
             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
-
         self.dataset = LevelDataset(
             config.level_data_path,
             self.game,
             latent_size=config.latent_size,
-            use_diversity_sampling=config.use_diversity_sampling
+            use_diversity_sampling=config.use_diversity_sampling,
+            seed=config.seed
         )
+
+        similarities = []
+        for i in range(len(self.dataset.data)):
+            for j in range(i + 1, len(self.dataset.data)):
+                level1 = self.dataset.data[i].representation
+                level2 = self.dataset.data[j].representation
+                similarities.append(self.game.check_similarity(level1, level2))
+
+        similarities_mean = statistics.mean(similarities)
+        similarities_stdev = statistics.stdev(similarities)
+
+        self.hamming_filter_threshold = config.bootstrap_hamming_filter if self.config.bootstrap_hamming_filter else similarities_mean + 3 * similarities_stdev
+        print("Hamming Filter :", self.hamming_filter_threshold)
+
         # Dataset files
         self.dataset_files = os.listdir(self.dataset.level_dir)
         print("Training Dataset :", self.dataset.level_dir)
@@ -71,7 +86,19 @@ class Trainer:
             self.level_visualizer = GVGAILevelVisualizer(self.game)
 
         # Network
-        self._build_model(models)
+        self.generator = models['generator']
+        self.discriminator = models['discriminator']
+        # Optimizer
+        # self.optimizer_g = torch.optim.Adam(self.generator.parameters(),
+        #                                     lr=self.config.generator_lr, betas=(0, 0.9))
+        # self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(),
+        #                                     lr=self.config.discriminator_lr, betas=(0, 0.9))
+        self.optimizer_g = torch.optim.RMSprop(
+            self.generator.parameters(), lr=self.config.generator_lr
+        )
+        self.optimizer_d = torch.optim.RMSprop(
+            self.discriminator.parameters(), lr=self.config.discriminator_lr
+        )
 
         # Other
         self.playability = 0
@@ -92,17 +119,6 @@ class Trainer:
             print(f"model_reset_epoch:{self.reset_epoch}")
             self.last_reset_steps = 0
             self.training_set_reset_count = 0
-
-    def _build_model(self, models):
-        self.generator = models['generator']
-        self.discriminator = models['discriminator']
-        # Optimizer
-        self.optimizer_g = torch.optim.RMSprop(
-            self.generator.parameters(), lr=self.config.generator_lr
-        )
-        self.optimizer_d = torch.optim.RMSprop(
-            self.discriminator.parameters(), lr=self.config.discriminator_lr
-        )
 
     def train(self):
         wandb.login()
@@ -134,7 +150,7 @@ class Trainer:
                 self.generator.train()
 
                 ### Discriminator Update ###
-                for _ in range(self.config.discrimianator_update_count):
+                for _ in range(self.config.discriminator_update_count):
                     latent, real, label = self.dataset.sample(
                         batch_size=self.config.train_batch_size)
                     latent, real, label = (
@@ -142,14 +158,14 @@ class Trainer:
                         real.to(self.device).float(),
                         label.to(self.device).int(),
                     )
-                    fake_logit, hiddens = self.generator(latent, label)
-                    Dx, DGz_d, discriminator_loss, recon_loss = self._discriminator_update(
-                        real, fake_logit, label
+                    fake_images, hiddens = self.generator(latent, label)
+                    Dx, DGz_d, discriminator_loss, recon_loss, gradient_penalty = self._discriminator_update(
+                        real, fake_images, label
                     )
 
                 ### Generator Update ###
                 generator_loss, div_loss = self._generator_update(
-                    latent, fake_logit, label, hiddens)
+                    latent, fake_images, label, hiddens)
 
                 metrics = {}
                 metrics["D(x)[Discriminator]"] = Dx
@@ -160,19 +176,21 @@ class Trainer:
                     metrics["Generator Div Loss"] = div_loss
                 if self.config.use_recon_loss:
                     metrics["Reconstruction Loss"] = recon_loss
+                if self.config.use_gradient_penalty:
+                    metrics["Gradient Penalty"] = gradient_penalty
                 wandb.log(metrics, step=self.step)
-                if not self.after_step():
+                if not self.after_step(real, label):
                     break
             self._evaluation()
             self._save_models(self.model_save_path, None, None)
 
-    def after_step(self):
+    def after_step(self, real_images: torch.Tensor, labels: torch.Tensor):
         self.generator.eval()
         with torch.no_grad():
             if self.step % self.image_save_epoch == 0:
                 self._save_images()
-                # if self.config.use_recon_loss:
-                #     self._save_recon_images(real, label)
+                if self.config.use_recon_loss:
+                    self._save_recon_images(real_images, labels)
 
             if self.step % self.eval_epoch == 0 or (self.config.bootstrap and self.step % self.bootstrap_epoch == 0):
                 # generate levels
@@ -180,7 +198,6 @@ class Trainer:
                     self.config.eval_playable_counts)
                 latents = latents.to(self.device).float()
                 labels = labels.to(self.device).int()
-
                 levels = self._generate_levels(latents, labels)
                 playable_levels = []
                 for level_str in levels:
@@ -244,7 +261,7 @@ class Trainer:
                         return False
         return True
 
-    def _generate_levels(self, latents, labels):
+    def _generate_levels(self, latents: torch.Tensor, labels: torch.Tensor):
         level_tensor, _ = self.generator(latents, labels)
         level_strs = self.game.level_tensor_to_strs(
             level_tensor)
@@ -318,8 +335,6 @@ class Trainer:
         wandb.log({"Reconstructed Levels": images}, self.step)
 
     def _eval_models(self, level_strs: list[str], playable_levels: list[str]):
-        for i in range(len(level_strs)):
-            level_strs[i] = level_strs[i].split()
         (
             level_similarity,
             duplication_rate,
@@ -342,25 +357,25 @@ class Trainer:
                 unique_playable_levels, self.config, self.game)
         elif self.config.bootstrap == "smart":  # データセット内のステージと比較して類似度が低いもののみを追加
             # 類似度フィルタ
-            if self.config.bootstrap_hamming_filter == None:
-                filtered_levels = unique_playable_levels
-            else:
-                # データセットのレベルたち
-                dataset_levels = []
-                for item in self.dataset.data:
-                    dataset_levels.append(item.representation)
-
-                filtered_levels = []
-                for generated_level in unique_playable_levels:
-                    dup = False
-                    for ds_level in dataset_levels:
-                        sim = self.game.check_similarity(
-                            generated_level.split(), ds_level.split())
-                        if sim >= self.config.bootstrap_hamming_filter:
-                            dup = True
-                            break
-                    if not dup:
-                        filtered_levels.append(generated_level)
+            # if self.config.bootstrap_hamming_filter == None:
+            #     filtered_levels = unique_playable_levels
+            # else:
+            # データセットのレベルたち
+            dataset_levels = []
+            for item in self.dataset.data:
+                dataset_levels.append(item.representation)
+            filtered_levels = []
+            for generated_level in unique_playable_levels:
+                dup = False
+                for ds_level in dataset_levels:
+                    sim = self.game.check_similarity(
+                        generated_level, ds_level)
+                    # if sim >= self.config.bootstrap_hamming_filter:
+                    if sim >= self.hamming_filter_threshold:
+                        dup = True
+                        break
+                if not dup:
+                    filtered_levels.append(generated_level)
 
             print(f"Filtered by Hamming: {len(filtered_levels)}")
 
@@ -415,7 +430,7 @@ class Trainer:
         # Update dataset
         return selected
 
-    def _level_add(self, level_str):
+    def _level_add(self, level_str: str):
         index = len(self.dataset_files)
         file = f'{self.config.env_name}_{index}'
         self.dataset_files.append(file)
@@ -432,23 +447,29 @@ class Trainer:
                 else:
                     pd[feature[i]] = 1
 
-    def _discriminator_update(self, real_images_logit, fake_images_logit, label=None):
+    def _discriminator_update(self, real_images: torch.Tensor, fake_images: torch.Tensor, label: torch.Tensor = None):
         """
         update discriminator: maximize log(D(x)) + log(1-D(G(z)))
         """
+        def mix(real, fake):
+            for i in range(real.size(0)):
+                if np.random.random() < 0.05:
+                    real[i, :] = fake[i, :]
+            return real.detach()
+
         self.discriminator.zero_grad()
         if self.config.use_recon_loss:
             real_logits, real_recon = self.discriminator(
-                real_images_logit, label)
+                real_images, label)
             fake_logits, _ = self.discriminator(
-                fake_images_logit.detach(), label)
+                fake_images.detach(), label)
             real_logits, fake_logits = real_logits.view(
                 -1), fake_logits.view(-1)
         else:
             real_logits = self.discriminator(
-                real_images_logit, label).view(-1)
+                real_images, label).view(-1)
             fake_logits = self.discriminator(
-                fake_images_logit.detach(), label).view(-1)
+                fake_images.detach(), label).view(-1)
 
         if self.config.adv_loss == "baseline":
             loss_real, loss_fake, D_x, D_G_z = loss.d_loss(
@@ -474,37 +495,29 @@ class Trainer:
 
         discriminator_loss = loss_real + loss_fake
 
+        gradient_penalty_item = None
         if self.config.use_gradient_penalty:
             # gradient_penalty
-            batch_size = real_images_logit.size()[0]
-            alpha = torch.rand(batch_size, 1, 1, 1)
-            alpha = alpha.expand_as(real_images_logit).to(self.device)
-            interpolated = (
-                alpha * real_images_logit + (1 - alpha) * fake_images_logit)
-            prob_interpolated = self.discriminator(interpolated)
-            gradients = torch.autograd.grad(
-                outputs=prob_interpolated, inputs=interpolated, grad_outputs=torch.ones(prob_interpolated.size()).to(self.device), create_graph=True, retain_graph=True)[0]
-            gradients = gradients.view(batch_size, -1)
-            gradients_norm = torch.sqrt(
-                torch.sum(gradients**2, dim=1) + 1e-12)
-            gradient_penalty = ((gradients_norm - 1.0)**2).mean()
+            gradient_penalty = loss.calc_gradient_penalty(
+                real_images, fake_images, self.discriminator)
             discriminator_loss += self.config.gp_lambda * gradient_penalty
+            gradient_penalty_item = gradient_penalty.item()
 
         recon_loss_item = None
         if self.config.use_recon_loss:
-            recon_loss = loss.recon_loss(real_recon, real_images_logit)
+            recon_loss = loss.recon_loss(real_recon, real_images)
             discriminator_loss += self.config.recon_lambda * recon_loss
             recon_loss_item = recon_loss.item()
 
         discriminator_loss.backward(retain_graph=True)
         self.optimizer_d.step()
 
-        if self.config.adv_loss == 'wgan':
+        if self.config.use_clipping_d:
             # clip weights of discriminator
             for p in self.discriminator.parameters():
                 p.data.clamp_(-0.01, 0.01)
 
-        return D_x, D_G_z, discriminator_loss.item(), recon_loss_item
+        return D_x, D_G_z, discriminator_loss.item(), recon_loss_item, gradient_penalty_item
 
     def _generator_update(self, latent: torch.Tensor, fake_images: torch.Tensor, label: torch.Tensor = None, hiddens: torch.Tensor = None):
         """
@@ -532,7 +545,7 @@ class Trainer:
         div_loss = loss.div_loss(
             latent, fake_images, hiddens, self.config.div_loss, self.config.lambda_div, self.game)
         generator_loss += div_loss
-        generator_loss.backward()
+        generator_loss.backward(retain_graph=True)
         self.optimizer_g.step()
 
         return generator_loss.item(), div_loss.item()
@@ -550,7 +563,7 @@ class Trainer:
             model_save_path
         )
 
-    def _calc_level_similarity(self, level_strs):
+    def _calc_level_similarity(self, level_strs: list[str]):
         res_level, res_duplicate, n_level = 0, 0, 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):

@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 import torch
 
+import random
 import numpy as np
 
 from .game.env import Game
@@ -19,11 +20,16 @@ class LevelItem:
 
 
 class LevelDataset(Dataset):
-    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32, use_diversity_sampling=False):
+    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32, use_diversity_sampling=False, seed=0):
+        random.seed(seed)
+        np.random.seed(seed)
         self.game = game
         self.level_dir = dataset_dir
         self.latent_size = latent_size
         self.use_diversity_sampling = use_diversity_sampling
+        self.initial_dataset_size = 0
+        self.select_initial_data_prob = 0.0
+        self.data_noise_coef = 0.00
         self.initialize()
 
     def initialize(self):
@@ -33,6 +39,7 @@ class LevelDataset(Dataset):
         self.level_paths = [os.path.join(
             self.level_dir, name) for name in os.listdir(self.level_dir)]
         self.data_length = len(self.level_paths)
+        self.initial_dataset_size = self.data_length
         for path in self.level_paths:
             with open(path, 'r') as f:
                 level = f.read()
@@ -65,68 +72,32 @@ class LevelDataset(Dataset):
         latent_batch = torch.zeros((batch_size, self.latent_size))
         level_batch = torch.zeros((batch_size, *self.game.input_shape))
         label_batch = torch.zeros((batch_size, self.game.input_shape[0]))
-        batch_features = {}
+        # batch_features = {}
         for index in range(batch_size):
             if self.use_diversity_sampling:
                 key_index = np.random.choice(len(self.feature2indices))
                 idx = np.random.choice(self.feature2indices[list(
                     self.feature2indices.keys())[key_index]])
-                item = self.data[idx]
-                if item.features in batch_features:
-                    batch_features[item.features] += 1
+                # 初期データの割合が低くなり始めたら初期データ選択確率を保証
+                if self.initial_dataset_size/self.data_length < self.select_initial_data_prob and np.random.random() < self.select_initial_data_prob:
+                    idx = np.random.randint(self.initial_dataset_size)
+                    item = self.data[idx]
                 else:
-                    batch_features[item.features] = 0
+                    item = np.random.choice(self.data)
+                item = self.data[idx]
+                # if item.features in batch_features:
+                #     batch_features[item.features] += 1
+                # else:
+                #     batch_features[item.features] = 0
             else:
                 item = np.random.choice(self.data)
+
             latent_batch[index] = torch.randn(self.latent_size)
             level_batch[index] = item.data
             label_batch[index] = item.label
         # for key, value in batch_features.items():
         #     print(f'{key} : {value}', end=', ')
         # print()
+        noise = torch.rand_like(level_batch)
+        level_batch = level_batch + self.data_noise_coef * noise
         return latent_batch, level_batch, label_batch
-
-
-class LevelDatasetOld(Dataset):
-    def __init__(
-        self,
-        dataset_dir: str,
-        game: Game,
-        latent_size: int,
-    ):
-        self.env = game
-        self.image_dir = dataset_dir
-        self.image_paths = [
-            os.path.join(self.image_dir, name) for name in os.listdir(self.image_dir)
-        ]
-        self.data_length = len(self.image_paths)
-        self.latent_size = latent_size
-
-    def __len__(self):
-        return self.data_length
-
-    def __getitem__(self, index):
-        latent = torch.randn(size=(self.latent_size,))
-        img_path = self.image_paths[index]
-        img, label = self._open(img_path)
-        return latent, img, label
-
-    def _open(self, img_path):
-        with open(img_path, "r") as f:
-            level_str = f.readlines()
-        ret = torch.zeros(
-            (len(self.env.ascii),
-             self.env.input_shape[1], self.env.input_shape[2]),
-        )
-        # padding
-        ret[1, :, :] = 1
-        # label : onehot vector of counts of map tile object.
-        label = torch.zeros(len(self.env.ascii))
-        for i, s in enumerate(level_str):
-            for j, c in enumerate(s):
-                if c == "\n":
-                    break
-                ret[1, i, j] = 0
-                ret[self.env.ascii.index(c), i, j] = 1
-                label[self.env.ascii.index(c)] += 1
-        return ret, label

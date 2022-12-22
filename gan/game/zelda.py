@@ -1,6 +1,7 @@
 from __future__ import annotations
 from .env import Game
 from collections import deque
+import wandb
 
 
 class Zelda(Game):
@@ -60,6 +61,8 @@ class Zelda(Game):
         return dist[gx][gy] != -1 and dist[kx][ky] != -1
 
     def check_similarity(self, level1: str, level2: str):
+        level1 = level1.split()
+        level2 = level2.split()
         n = 0
         hit = 0
         for i in range(self.height):
@@ -111,9 +114,14 @@ class Zelda(Game):
 
         key_duplication, goal_duplication, player_duplication, total_object_duplication, total_hamming_dist, dup90, n = 0, 0, 0, 0, 0, 0, 0
         levels_small_set = playable_levels[:1000]
+        similarity_threshold_list = [0.60, 0.65,
+                                     0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
+        duplication_rate_list = [0 for i in range(
+            len(similarity_threshold_list))]
+
         for i in range(len(levels_small_set)):
             for j in range(len(levels_small_set)):
-                if i < j:
+                if i <= j:
                     continue
                 kd, gd, pd, sod = check_level_object_duprecated(
                     levels_small_set[i], levels_small_set[j])
@@ -124,9 +132,13 @@ class Zelda(Game):
                 hamming = check_level_hamming(
                     levels_small_set[i], levels_small_set[j])
                 total_hamming_dist += hamming
-                if hamming / (self.height * self.width) <= 0.10:
-                    dup90 += 1
+                for k in range(len(similarity_threshold_list)):
+                    if hamming / (self.height * self.width) <= (1 - similarity_threshold_list[k]):
+                        duplication_rate_list[k] += 1
                 n += 1
+
+        for i in range(len(duplication_rate_list)):
+            duplication_rate_list[i] /= n
 
         unique_levels = list(set(playable_levels))
 
@@ -134,7 +146,11 @@ class Zelda(Game):
         metrics["Final Duplication Rate"] = 1 - \
             len(unique_levels) / len(playable_levels)
         metrics["Hamming Distance"] = total_hamming_dist / n
-        metrics[r"90% duplication Rate"] = dup90 / n
+        data = [[x, y] for (x, y) in zip(
+            similarity_threshold_list, duplication_rate_list)]
+        table = wandb.Table(data=data, columns=['rate', 'duplications'])
+        metrics[r'X% Duplication Rate'] = wandb.plot.line(
+            table, 'rate', 'duplications')
         metrics["Object Duplication Rate"] = total_object_duplication / n
         metrics["Key Duplication Rate"] = key_duplication / n
         metrics["Goal Duplication Rate"] = goal_duplication / n
@@ -143,6 +159,7 @@ class Zelda(Game):
         print("Hamming Distance:", total_hamming_dist / n)
         print("Obj Duplication Rate:", total_object_duplication / n)
 
+        # Tile Distributions
         n_w, n_f, n_e, n = 0, 0, 0, 0
         vw, vf, ve = [], [], []
 
@@ -164,6 +181,7 @@ class Zelda(Game):
             vw.append(w)
             vf.append(f)
             ve.append(e)
+
         sw, sf, se = 0, 0, 0
         for nw, nf, ne in zip(vw, vf, ve):
             sw += (nw - n_w / n)**2
@@ -173,15 +191,15 @@ class Zelda(Game):
         metrics["Wall avg."] = n_w / n
         metrics["Floor avg."] = n_f / n
         metrics["Enemy avg."] = n_e / n
-        metrics["Wall var."] = sw / n
-        metrics["Floor var."] = sf / n
-        metrics["Enemy var."] = se / n
+        metrics["Wall std."] = (sw / n)**0.5
+        metrics["Floor std."] = (sf / n)**0.5
+        metrics["Enemy std."] = (se / n)**0.5
 
         print('Ave. Wall:', n_w / n)
         print('Ave. Floor:', n_f / n)
         print('Ave. Enemy:', n_e / n)
-        print('Std. Wall:', sw / n)
-        print('Std. Floor:', sf / n)
-        print('Std. Enemy:', se / n)
+        print('Std. Wall:', (sw / n)**0.5)
+        print('Std. Floor:', (sf / n)**0.5)
+        print('Std. Enemy:', (se / n)**0.5)
 
         return metrics

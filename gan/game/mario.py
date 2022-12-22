@@ -1,6 +1,7 @@
 from __future__ import annotations
 from .env import Game
 from collections import deque
+import wandb
 
 COVER_THRESHOLD = 0.20
 TILE_TYPE_THRESHOLD = 3
@@ -103,11 +104,14 @@ class Mario(Game):
     def _check_tile_balance(self, g: list[str]):
         '''
         タイルの種類数と全体に占める割合をチェック
+        上3列見てブロックがあればNG
         '''
         tile_dict = {}
         ok = True
         for i, row in enumerate(g[:self.height]):
             for j, c in enumerate(row[:self.width]):
+                if i < 3 and c != '-':
+                    return False
                 if c in tile_dict:
                     tile_dict[c] += 1
                 else:
@@ -213,6 +217,8 @@ class Mario(Game):
         return ok, visited
 
     def check_similarity(self, level1: str, level2: str):
+        level1 = level1.split()
+        level2 = level2.split()
         n = 0
         hit = 0
         for i in range(self.height):
@@ -250,17 +256,26 @@ class Mario(Game):
             return hit
 
         levels_small_set = playable_levels[:1000]
-        total_hamming_dist, dup90, n = 0, 0, 0
+        total_hamming_dist, n = 0, 0
+        similarity_threshold_list = [0.60, 0.65,
+                                     0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
+        duplication_rate_list = [0 for i in range(
+            len(similarity_threshold_list))]
+
         for i in range(len(levels_small_set)):
             for j in range(len(levels_small_set)):
-                if i < j:
+                if i <= j:
                     continue
                 hamming = check_level_hamming(
                     levels_small_set[i], levels_small_set[j])
                 total_hamming_dist += hamming
-                if hamming / (self.height * self.width) <= 0.10:
-                    dup90 += 1
+                for k in range(len(similarity_threshold_list)):
+                    if hamming / (self.height * self.width) <= (1 - similarity_threshold_list[k]):
+                        duplication_rate_list[k] += 1
                 n += 1
+
+        for i in range(len(duplication_rate_list)):
+            duplication_rate_list[i] /= n
 
         unique_levels = list(set(playable_levels))
 
@@ -268,7 +283,11 @@ class Mario(Game):
         metrics["Final Duplication Rate"] = 1 - \
             len(unique_levels) / len(playable_levels)
         metrics["Hamming Distance"] = total_hamming_dist / n
-        metrics[r"90% duplication Rate"] = dup90 / n
+        data = [[x, y] for (x, y) in zip(
+            similarity_threshold_list, duplication_rate_list)]
+        table = wandb.Table(data=data, columns=['rate', 'duplications'])
+        metrics[r'X% Duplication Rate'] = wandb.plot.line(
+            table, 'rate', 'duplications')
         print("Duplication Rate:", 1 - len(unique_levels) / len(playable_levels))
         print("Hamming Distance:", total_hamming_dist / n)
         return metrics

@@ -4,7 +4,7 @@ import torch.nn as nn
 from gan.game.env import Game
 
 
-def d_loss(real_logits: torch.Tensor, fake_logits: torch.Tensor, smooth_label_value: float = 0.2):
+def d_loss(real_logits: torch.Tensor, fake_logits: torch.Tensor, smooth_label_value: float = 0.1):
     # loss from real images
     p_real = torch.sigmoid(real_logits)
     real_labels = torch.full_like(real_logits, fill_value=smooth_label_value)
@@ -42,9 +42,9 @@ def div_loss(latent: torch.Tensor, fake: torch.Tensor, hiddens: list[torch.Tenso
     elif loss_type == 'l1-hidden-latent':
         return -torch.abs(hiddens[1][1:] - hiddens[1][:-1]).mean() / torch.abs(latent[1:] - latent[:-1]).mean() * lambda_div
     elif loss_type == 'l1-latent':
-        return -(torch.abs(fake[1:, :, :game.height, :game.width] - fake[:-1, :, :game.height, :game.width]).mean() / torch.abs(latent[1:, :, :game.height, :game.width] - latent[:-1, :, :game.height, :game.width]).mean()) * lambda_div
+        return -(torch.abs(first - second).mean() / torch.abs(latent[1:] - latent[:-1]).mean()) * lambda_div
     elif loss_type == "l2":
-        return -((fake[1:, :, :game.height, :game.width] - fake[:-1, :, :game.height, :game.width]) ** 2).mean() * lambda_div
+        return -((first - second) ** 2).mean() * lambda_div
     elif loss_type is None:
         return torch.tensor(0)
     else:
@@ -93,3 +93,16 @@ def d_loss_lsgan(real_logits: torch.Tensor, fake_logits: torch.Tensor):
 def g_loss_lsgan(fake_logits: torch.Tensor):
     generator_loss = nn.MSELoss()(fake_logits, torch.ones_like(fake_logits) * 0.0)
     return generator_loss
+
+
+def calc_gradient_penalty(real_images: torch.Tensor, fake_images: torch.Tensor, discriminator: nn.Module):
+    batch_size = real_images.size()[0]
+    alpha = torch.rand(batch_size, 1, 1, 1)
+    alpha = alpha.expand_as(real_images).to(real_images.device)
+    interpolated = alpha * real_images + (1 - alpha) * fake_images
+    prob_interpolated = discriminator(interpolated)
+    gradients = torch.autograd.grad(
+        outputs=prob_interpolated, inputs=interpolated, grad_outputs=torch.ones(prob_interpolated.size()).to(real_images.device), create_graph=True, retain_graph=True)[0]
+    gradients_norm = gradients.norm(2, dim=1)
+    gradient_penalty = ((gradients_norm - 1)**2).mean()
+    return gradient_penalty

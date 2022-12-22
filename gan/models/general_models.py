@@ -109,7 +109,7 @@ class Self_Attn(nn.Module):
         proj_value = self.value_conv(x).view(b, -1, w * h)  # (B,C,WH)
 
         out = torch.bmm(proj_value, attention.permute(0, 2, 1))
-        out = out.view(b, -1, w, h)
+        out = out.view(b, c, w, h)
 
         out = self.gamma * out + x
         return out
@@ -146,10 +146,11 @@ class MiniBatchStd(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, isize, nz, nc, ndf, use_self_attention, use_spectral_norm=False, n_extra_layers=0):
+    def __init__(self, isize, nz, nc, ndf, use_self_attention, use_spectral_norm=False, normalization='Batch', use_recon_loss=False, n_extra_layers=0):
         super(Discriminator, self).__init__()
         self.self_attention = use_self_attention
         self.use_spectral_norm = use_spectral_norm
+        self.use_recon_loss = use_recon_loss
         self.nc = nc
         self.isize = isize
         assert isize % 16 == 0, "isize has to be a multiple of 16"
@@ -173,10 +174,14 @@ class Discriminator(nn.Module):
 
         # Extra layers
         for t in range(n_extra_layers):
-            main.add_module('extra-layers-{0}_{1}_conv'.format(t, cndf),
-                            nn.Conv2d(cndf, cndf, 3, 1, 1, bias=False))
-            # main.add_module('extra-layers-{0}_{1}_batchnorm'.format(t, cndf),
-            #                 nn.BatchNorm2d(cndf))
+            if use_spectral_norm:
+                main.add_module('extra-layers-{0}_{1}_conv'.format(t, cndf),
+                                nn.utils.parametrizations.spectral_norm(nn.Conv2d(cndf, cndf, 3, 1, 1, bias=False)))
+            else:
+                main.add_module('extra-layers-{0}_{1}_conv'.format(t, cndf),
+                                nn.Conv2d(cndf, cndf, 3, 1, 1, bias=False))
+                main.add_module('extra-layers-{0}_{1}_batchnorm'.format(t, cndf),
+                                nn.BatchNorm2d(cndf))
             main.add_module('extra-layers-{0}_{1}_relu'.format(t, cndf),
                             nn.LeakyReLU(0.2, inplace=True))
 
@@ -187,37 +192,57 @@ class Discriminator(nn.Module):
                 main.add_module('pyramid_{0}_selfattn'.format(
                     out_feat), Self_Attn(in_feat))
                 main.add_module('initial_{0}_relu'.format(nc),
-                                nn.LeakyReLU(0.2, inplace=True))  # nn.Softmax(1))    #Was TANH nn.Tanh())#
-
+                                nn.LeakyReLU(0.2, inplace=True))
             if use_spectral_norm:
                 main.add_module('pyramid_{0}-{1}_conv'.format(in_feat, out_feat),
                                 torch.nn.utils.parametrizations.spectral_norm(nn.Conv2d(in_feat, out_feat, 4, 2, 1, bias=False)))
             else:
                 main.add_module('pyramid_{0}-{1}_conv'.format(in_feat, out_feat),
                                 nn.Conv2d(in_feat, out_feat, 4, 2, 1, bias=False))
-                main.add_module('pyramid_{0}_batchnorm'.format(out_feat),
-                                nn.BatchNorm2d(out_feat))
+            main.add_module('pyramid_{0}_normalization'.format(out_feat), self.normalization_layer(
+                normalization, num_features=out_feat, layer_shape=[out_feat, int(csize // 2), int(csize // 2)]))
             main.add_module('pyramid_{0}_relu'.format(out_feat),
                             nn.LeakyReLU(0.2, inplace=True))
 
             cndf = cndf * 2
             csize = csize / 2
 
-        # state size. K x 4 x 4
-        if self.use_spectral_norm:
-            main.add_module('final_{0}-{1}_conv'.format(cndf, 1),
-                            torch.nn.utils.parametrizations.spectral_norm(nn.Conv2d(cndf, 1, 4, 1, 0, bias=False)))
-        else:
-            main.add_module('final_{0}-{1}_conv'.format(cndf, 1),
-                            nn.Conv2d(cndf, 1, 4, 1, 0, bias=False))
-
         self.main = main
 
-    def forward(self, input, label=None):
-        output = self.main(input)
+        output = nn.Sequential()
+        # state size. K x 4 x 4
+        # main.add_module('name', MiniBatchStd())
+        if use_spectral_norm:
+            output.add_module('final_{0}-{1}_conv'.format(cndf, 1),
+                              torch.nn.utils.parametrizations.spectral_norm(nn.Conv2d(cndf, 1, 4, 1, 0, bias=False)))
+        else:
+            output.add_module('final_{0}-{1}_conv'.format(cndf, 1),
+                              nn.Conv2d(cndf, 1, 4, 1, 0, bias=False))
+        self.output = output
+        if self.use_recon_loss:
+            self.decoder = Decoder(isize, nz, nc, ndf)
 
+    def normalization_layer(self, normalization: str, num_features: int, layer_shape: list[int]):
+        if normalization is None:
+            return nn.Identity()
+        elif normalization == 'Batch':
+            return nn.BatchNorm2d(num_features)
+        elif normalization == 'Instance':
+            return nn.InstanceNorm2d(num_features)
+        elif normalization == 'Layer':
+            return nn.LayerNorm(layer_shape)
+        else:
+            raise NotImplementedError()
+
+    def forward(self, input, label=None):
+        hidden = self.main(input)
+        output = self.output(hidden)
         output = output.mean(0)
-        return output.view(1)
+        if self.use_recon_loss:
+            recon = self.decoder(hidden)
+            return output.view(1), recon
+        else:
+            return output.view(1)
 
     def summary(self, batch_size=64, device=None):
         summary(self, (batch_size, self.nc,
@@ -242,6 +267,8 @@ class Generator(nn.Module):
         # input is Z, going into a convolution
         main.add_module('initial_{0}-{1}_convt'.format(nz, cngf),
                         nn.ConvTranspose2d(nz, cngf, 4, 1, 0, bias=False))
+        # main.add_module('initial_{0}-{1}_convt'.format(nz, cngf),
+        #                 nn.utils.parametrizations.spectral_norm(nn.ConvTranspose2d(nz, cngf, 4, 1, 0, bias=False)))
         main.add_module('initial_{0}_batchnorm'.format(cngf),
                         nn.BatchNorm2d(cngf))
         main.add_module('initial_{0}_relu'.format(cngf),
@@ -254,13 +281,15 @@ class Generator(nn.Module):
             main = nn.Sequential()
             main.add_module('pyramid_{0}-{1}_convt'.format(cngf, cngf // 2),
                             nn.ConvTranspose2d(cngf, cngf // 2, 4, 2, 1, bias=False))
+            # main.add_module('pyramid_{0}-{1}_convt'.format(cngf, cngf // 2),
+            #                 nn.utils.parametrizations.spectral_norm(nn.ConvTranspose2d(cngf, cngf // 2, 4, 2, 1, bias=False)))
             main.add_module('pyramid_{0}_batchnorm'.format(cngf // 2),
                             nn.BatchNorm2d(cngf // 2))
             main.add_module('pyramid_{0}_relu'.format(cngf // 2),
                             nn.ReLU(True))
-            if self.self_attention:
-                main.add_module('pyramid_{0}_selfattn'.format(
-                    cngf // 2), Self_Attn(cngf // 2))
+            # if self.self_attention:
+            #     main.add_module('pyramid_{0}_selfattn'.format(
+            #         cngf // 2), Self_Attn(cngf // 2))
             self.mods.append(main)
             cngf = cngf // 2
             csize = csize * 2
@@ -270,8 +299,8 @@ class Generator(nn.Module):
             main = nn.Sequential()
             main.add_module('extra-layers-{0}_{1}_conv'.format(t, cngf),
                             nn.Conv2d(cngf, cngf, 3, 1, 1, bias=False))
-            main.add_module('extra-layers-{0}_{1}_batchnorm'.format(t, cngf),
-                            nn.BatchNorm2d(cngf))
+            # main.add_module('extra-layers-{0}_{1}_batchnorm'.format(t, cngf),
+            #                 nn.BatchNorm2d(cngf))
             main.add_module('extra-layers-{0}_{1}_relu'.format(t, cngf),
                             nn.ReLU(True))
             self.mods.append(main)
@@ -279,16 +308,14 @@ class Generator(nn.Module):
         main = nn.Sequential()
         main.add_module('final_{0}-{1}_convt'.format(cngf, nc),
                         nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False))
-        # main.add_module('final_{0}_tanh'.format(nc),
-        #                 nn.ReLU())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
-        main.add_module('final_{0}_softmax'.format(nc),
-                        nn.Softmax2d())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
+        # main.add_module('final_{0}-{1}_convt'.format(cngf, nc),
+        #                 nn.utils.parametrizations.spectral_norm(nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False)))
         if self.self_attention:
             main.add_module('final_{0}_selfattn'.format(nc), Self_Attn(nc))
-            # main.add_module('final_{0}_tanh'.format(nc),
-            #                 nn.ReLU())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
-            main.add_module('final_{0}_softmax'.format(nc),
-                            nn.Softmax2d())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
+        main.add_module('final_{0}_softmax'.format(nc),
+                        nn.Softmax2d())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
+        # main.add_module('final_{0}_softmax'.format(nc),
+        #                 nn.Sigmoid())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
 
         self.mods.append(main)
         self.mods = nn.ModuleList(self.mods)
@@ -301,6 +328,53 @@ class Generator(nn.Module):
             hiddens.append(hidden)
         output = hidden
         return output, hiddens
+
+    def summary(self, batch_size=64, device=None):
+        summary(self, (batch_size, self.nz), device=device)
+
+
+class Decoder(nn.Module):
+    def __init__(self, isize, nz, nc, ngf, self_attention=False, n_extra_layers=0):
+        super(Decoder, self).__init__()
+        self.self_attention = self_attention
+        self.nz = nz
+        assert isize % 16 == 0, "isize has to be a multiple of 16"
+
+        cngf, tisize = ngf // 2, 4
+        while tisize != isize:
+            cngf = cngf * 2
+            tisize = tisize * 2
+
+        main = nn.Sequential()
+        csize, cndf = 4, cngf
+        while csize < isize // 2:
+            main.add_module('pyramid_{0}-{1}_convt'.format(cngf, cngf // 2),
+                            nn.ConvTranspose2d(cngf, cngf // 2, 4, 2, 1, bias=False))
+            # main.add_module('pyramid_{0}-{1}_convt'.format(cngf, cngf // 2),
+            #                 nn.utils.parametrizations.spectral_norm(nn.ConvTranspose2d(cngf, cngf // 2, 4, 2, 1, bias=False)))
+            main.add_module('pyramid_{0}_batchnorm'.format(cngf // 2),
+                            nn.BatchNorm2d(cngf // 2))
+            main.add_module('pyramid_{0}_relu'.format(cngf // 2),
+                            nn.ReLU(True))
+            # if self.self_attention:
+            #     main.add_module('pyramid_{0}_selfattn'.format(
+            #         cngf // 2), Self_Attn(cngf // 2))
+            cngf = cngf // 2
+            csize = csize * 2
+
+        main.add_module('final_{0}-{1}_convt'.format(cngf, nc),
+                        nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False))
+        # main.add_module('final_{0}-{1}_convt'.format(cngf, nc),
+        #                 nn.utils.parametrizations.spectral_norm(nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False)))
+        if self.self_attention:
+            main.add_module('final_{0}_selfattn'.format(nc), Self_Attn(nc))
+        main.add_module('final_{0}_softmax'.format(nc),
+                        nn.Softmax2d())  # nn.Softmax(1))    #Was TANH nn.Tanh())#
+        self.main = main
+
+    def forward(self, input, label=None):
+        output = self.main(input)
+        return output
 
     def summary(self, batch_size=64, device=None):
         summary(self, (batch_size, self.nz), device=device)

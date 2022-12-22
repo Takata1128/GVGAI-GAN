@@ -7,22 +7,25 @@ import os
 @dataclass
 class BaseConfig:
     # training name
-    name: str = "none"
+    name: str = "new"
 
     # environment name
     env_name: str = "zelda"
     env_version: str = 'v1'
 
     # model architecture
-    latent_size: int = 16  # latent dims for generation
-    generator_filters: int = 128
-    discriminator_filters: int = 128
+    latent_size: int = 32  # latent dims for generation
+    generator_filters: int = 64
+    discriminator_filters: int = 64
     # field(default_factory=lambda: [1, 2])
     use_self_attention_g: bool = False
     # field(default_factory=lambda: [0, 1])
     use_self_attention_d: bool = False
-    use_spectral_norm_d: bool = False
-
+    use_spectral_norm_d: bool = True
+    normalization_d: str = 'Batch'  # implemented None, "Batch", "Instance" or "Layer"
+    use_clipping_d: bool = False
+    extra_layers_g: int = 0
+    extra_layers_d: int = 0
     # use_linear4z2features_g: bool = False
     # use_deconv_g: bool = True
     # use_bn_d: bool = False
@@ -39,16 +42,16 @@ class BaseConfig:
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
     use_gradient_penalty: bool = False
-    gp_lambda: float = 10.0
+    gp_lambda: float = 0.5
     generator_lr: float = 0.0001
     discriminator_lr: float = 0.0001
-    discrimianator_update_count: int = 1
+    discriminator_update_count: int = 5
     train_batch_size: int = 32  # training batch size
     steps: int = 10000 * (train_batch_size // 32)  # training steps
-    dataset_size: int = 100
+    dataset_size: int = 128
 
     bootstrap: str = "smart"  # ["none", "random", "smart"]
-    bootstrap_hamming_filter: float = 0.90
+    bootstrap_hamming_filter: float = None
     bootstrap_property_filter: float = None
     bootstrap_kmeans_filter: bool = True
     use_diversity_sampling: bool = False
@@ -57,8 +60,8 @@ class BaseConfig:
     # others parameters
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
-    gpu_id: int = 5  # gpu index
-    eval_playable_counts: int = 100  # number of z to check playable.
+    gpu_id: int = 6  # gpu index
+    eval_playable_counts: int = 300  # number of z to check playable.
     clone_data: bool = False
     flip_data: bool = False
     bootstrap: str = None
@@ -183,14 +186,16 @@ class MarioConfig(BaseConfig):
     env_name: str = "mario"
     env_version: str = 'v0'
 
+    latent_size = 32
+
     generator_filters: int = 64
     discriminator_filters: int = 64
 
     # learning parameters
     adv_loss: str = "hinge"
-    discrimianator_update_count: int = 1
+    discriminator_update_count: int = 1
     div_loss: str = None
-    lambda_div: float = 50.0
+    lambda_div: float = 10.0
 
     bootstrap: str = None
 
@@ -200,14 +205,14 @@ class MarioConfig(BaseConfig):
     save_image_epoch: int = 100
     save_model_epoch: int = 1000
     eval_epoch: int = 100
-    bootstrap_epoch: int = 25
+    bootstrap_epoch: int = 10
     dataset_size: int = 174
 
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
 
     generator_lr: float = 0.0001
-    discriminator_lr: float = 0.0004
+    discriminator_lr: float = 0.0001
 
 
 @dataclass
@@ -218,24 +223,15 @@ class ZeldaConfig(BaseConfig):
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 64
     discriminator_filters: int = 64
-    use_self_attention_g: list[int] = field(default_factory=lambda: [1, 2])
-    use_self_attention_d: list[int] = field(default_factory=lambda: [0, 1])
-    use_linear4z2features_g: bool = False
-    use_deconv_g: bool = False
-    use_bn_d: bool = False
-    use_sn_d: bool = False
-    use_pooling_d: bool = False
-    use_minibatch_std: bool = False
-    use_spectral_norm: bool = False
-    use_conditional: bool = False
+    use_spectral_norm_d: bool = True
 
     # learning parameters
-    adv_loss: str = "wgan"
-    discrimianator_update_count: int = 5
+    adv_loss: str = "hinge"
+    discrimianator_update_count: int = 1
     div_loss: str = "l1"
-    lambda_div: float = 0.5
+    lambda_div: float = 10.0
     bootstrap: str = "smart"
-    bootstrap_hamming_filter: float = 0.90
+    # bootstrap_hamming_filter: float = 0.90
     bootstrap_property_filter: float = None
     bootstrap_kmeans_filter: bool = True
     bootstrap_max_count: int = 10
@@ -265,17 +261,14 @@ class BoulderdashConfig(BaseConfig):
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 64
     discriminator_filters: int = 64
-    use_self_attention_g: list[int] = None
-    use_self_attention_d: list[int] = None
-    use_linear4z2features_g: bool = False
+    use_spectral_norm_d: bool = True
 
     # learning parameters
     adv_loss: str = "hinge"
-    discrimianator_update_count: int = 1
-    div_loss: str = "l1"
-    lambda_div: float = 50.0
+    discriminator_update_count: int = 1
+    div_loss: str = None
+    lambda_div: float = 10.0
     bootstrap: str = "smart"
-    bootstrap_hamming_filter: float = 0.90
     bootstrap_property_filter: float = None
     bootstrap_kmeans_filter: bool = True
     bootstrap_max_count: int = 10
@@ -294,4 +287,4 @@ class BoulderdashConfig(BaseConfig):
     recon_lambda: float = 1.0
 
     generator_lr: float = 0.0001
-    discriminator_lr: float = 0.0004
+    discriminator_lr: float = 0.0001
