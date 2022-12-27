@@ -39,6 +39,58 @@ if __name__ == "__main__":
         }
         return models_dict
 
+    for i in range(3):
+        game = Mario()
+        config = cfg.MarioConfig()
+        config.set_env(game)
+        config.seed = i
+        config.initial_data_prob = 0.20
+        config.initial_data_sampling_steps = 3000
+        models_dict = get_models(game, config)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    for i in range(3):
+        game = Zelda()
+        config = cfg.ZeldaConfig()
+        config.set_env(game)
+        config.seed = i
+        config.initial_data_prob = 0.20
+        config.initial_data_sampling_steps = 3000
+        models_dict = get_models(game, config)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+    for i in range(3):
+        game = Boulderdash()
+        config = cfg.BoulderdashConfig()
+        config.set_env(game)
+        config.seed = i
+        config.initial_data_prob = 0.20
+        config.initial_data_sampling_steps = 3000
+        models_dict = get_models(game, config)
+        trainer = Trainer(game, models_dict, config)
+        trainer.train()
+
+        # game = Mario()
+        # config = cfg.MarioConfig()
+        # config.set_env(game)
+        # config.seed = i
+        # config.bootstrap = None
+        # config.div_loss = None
+        # config.use_diversity_sampling = True
+        # config.generator_lr = 0.0001
+        # config.discriminator_lr = 0.0001
+        # config.discriminator_update_count = 5
+        # config.use_spectral_norm_d = True
+        # config.use_clipping_d = True
+        # config.use_gradient_penalty = False
+        # config.normalization_d = None
+        # config.set_learning_from_augmented()
+        # models_dict = get_models(game, config)
+        # trainer = Trainer(game, models_dict, config)
+        # trainer.train()
+
     # game = Boulderdash()
     # config = cfg.BoulderdashConfig()
     # config.set_env(game)
@@ -97,27 +149,27 @@ if __name__ == "__main__":
     #     trainer = Trainer(game, models_dict, config)
     #     trainer.train()
 
-    # # for i in range(3):
-    # #     game = Boulderdash()
-    # #     config = cfg.BoulderdashConfig()
-    # #     config.set_env(game)
-    # #     config.seed = i
-    # #     config.bootstrap = 'smart'
-    # #     config.div_loss = None
-    # #     config.lambda_div = 10.0
-    # #     config.use_diversity_sampling = True
-    # #     config.generator_lr = 0.0001
-    # #     config.discriminator_lr = 0.0001
-    # #     config.discriminator_update_count = 5
-    # #     config.use_spectral_norm_d = True
-    # #     config.use_clipping_d = True
-    # #     config.use_gradient_penalty = False
-    # #     config.normalization_d = None
-    # #     models_dict = get_models(game, config)
-    # #     trainer = Trainer(game, models_dict, config)
-    # #     trainer.train()
-
     # for i in range(3):
+    #     game = Boulderdash()
+    #     config = cfg.BoulderdashConfig()
+    #     config.set_env(game)
+    #     config.seed = i
+    #     config.bootstrap = 'smart'
+    #     config.div_loss = None
+    #     config.lambda_div = 10.0
+    #     config.use_diversity_sampling = True
+    #     config.generator_lr = 0.0001
+    #     config.discriminator_lr = 0.0001
+    #     config.discriminator_update_count = 5
+    #     config.use_spectral_norm_d = True
+    #     config.use_clipping_d = True
+    #     config.use_gradient_penalty = False
+    #     config.normalization_d = None
+    #     models_dict = get_models(game, config)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
+
+    # for i in range(1):
     #     game = Boulderdash()
     #     config = cfg.BoulderdashConfig()
     #     config.set_env(game)
@@ -231,98 +283,57 @@ if __name__ == "__main__":
     #     config.use_clipping_d = True
     #     config.use_gradient_penalty = False
     #     config.normalization_d = None
+    #     config.bootstrap_hamming_filter = 0.90
     #     models_dict = get_models(game, config)
     #     trainer = Trainer(game, models_dict, config)
     #     trainer.train()
 
-    for i in range(3):
-        game = Mario()
-        config = cfg.MarioConfig()
-        config.set_env(game)
-        config.seed = i
-        config.bootstrap = 'smart'
-        config.div_loss = 'l1'
-        config.lambda_div = 10.0
-        config.use_diversity_sampling = True
-        config.generator_lr = 0.0001
-        config.discriminator_lr = 0.0001
-        config.discriminator_update_count = 5
-        config.use_spectral_norm_d = True
-        config.use_clipping_d = True
-        config.use_gradient_penalty = False
-        config.normalization_d = None
-        config.dataset_size = 10
-        models_dict = get_models(game, config)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
+    # game = Mario()
+    # config = cfg.MarioConfig()
+    # config.set_env(game)
+    # config.bootstrap = None
+    # config.div_loss = None
+    # config.lambda_div = 10.0
+    # config.use_diversity_sampling = False
+    # config.generator_lr = 0.0001
+    # config.discriminator_lr = 0.0001
+    # config.discriminator_update_count = 5
+    # config.use_spectral_norm_d = True
+    # config.use_clipping_d = True
+    # config.use_gradient_penalty = False
+    # config.normalization_d = None
+    # config.dataset_size = 10
+    # models_dict = get_models(game, config)
+    # trainer = Trainer(game, models_dict, config)
+    # trainer.train()
 
-    game = Mario()
-    config = cfg.MarioConfig()
-    config.set_env(game)
-    config.bootstrap = None
-    config.div_loss = None
-    config.lambda_div = 10.0
-    config.use_diversity_sampling = False
-    config.generator_lr = 0.0001
-    config.discriminator_lr = 0.0001
-    config.discriminator_update_count = 5
-    config.use_spectral_norm_d = True
-    config.use_clipping_d = True
-    config.use_gradient_penalty = False
-    config.normalization_d = None
-    config.dataset_size = 10
-    models_dict = get_models(game, config)
-    trainer = Trainer(game, models_dict, config)
-    trainer.train()
-
-    for i in range(3):
-        game = Mario()
-        config = cfg.MarioConfig()
-        config.set_env(game)
-        config.seed = i
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.lambda_div = 10.0
-        config.use_diversity_sampling = False
-        config.generator_lr = 0.0001
-        config.discriminator_lr = 0.0001
-        config.discriminator_update_count = 5
-        config.use_spectral_norm_d = True
-        config.use_clipping_d = True
-        config.use_gradient_penalty = False
-        config.normalization_d = None
-        config.dataset_size = 10
-        models_dict = get_models(game, config)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
-
-    for i in range(3):
-        game = Mario()
-        config = cfg.MarioConfig()
-        config.seed = i
-        config.set_env(game)
-        config.bootstrap = 'baseline'
-        config.div_loss = None
-        config.lambda_div = 10.0
-        config.use_diversity_sampling = True
-        config.generator_lr = 0.0001
-        config.discriminator_lr = 0.0001
-        config.discriminator_update_count = 5
-        config.use_spectral_norm_d = True
-        config.use_clipping_d = True
-        config.use_gradient_penalty = False
-        config.normalization_d = None
-        config.dataset_size = 10
-        models_dict = get_models(game, config)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
+    # for i in range(3):
+    #     game = Mario()
+    #     config = cfg.MarioConfig()
+    #     config.set_env(game)
+    #     config.seed = i
+    #     config.bootstrap = 'baseline'
+    #     config.div_loss = None
+    #     config.lambda_div = 10.0
+    #     config.use_diversity_sampling = False
+    #     config.generator_lr = 0.0001
+    #     config.discriminator_lr = 0.0001
+    #     config.discriminator_update_count = 5
+    #     config.use_spectral_norm_d = True
+    #     config.use_clipping_d = True
+    #     config.use_gradient_penalty = False
+    #     config.normalization_d = None
+    #     config.dataset_size = 10
+    #     models_dict = get_models(game, config)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()
 
     # for i in range(3):
     #     game = Mario()
     #     config = cfg.MarioConfig()
     #     config.seed = i
     #     config.set_env(game)
-    #     config.bootstrap = 'smart'
+    #     config.bootstrap = 'baseline'
     #     config.div_loss = None
     #     config.lambda_div = 10.0
     #     config.use_diversity_sampling = True
@@ -338,23 +349,44 @@ if __name__ == "__main__":
     #     trainer = Trainer(game, models_dict, config)
     #     trainer.train()
 
-    for i in range(3):
-        game = Mario()
-        config = cfg.MarioConfig()
-        config.set_env(game)
-        config.seed = i
-        config.bootstrap = 'smart'
-        config.div_loss = 'l1'
-        config.lambda_div = 10.0
-        config.use_diversity_sampling = True
-        config.generator_lr = 0.0001
-        config.discriminator_lr = 0.0001
-        config.discriminator_update_count = 5
-        config.use_spectral_norm_d = True
-        config.use_clipping_d = True
-        config.use_gradient_penalty = False
-        config.normalization_d = None
-        config.dataset_size = 10
-        models_dict = get_models(game, config)
-        trainer = Trainer(game, models_dict, config)
-        trainer.train()
+    # # for i in range(3):
+    # #     game = Mario()
+    # #     config = cfg.MarioConfig()
+    # #     config.seed = i
+    # #     config.set_env(game)
+    # #     config.bootstrap = 'smart'
+    # #     config.div_loss = None
+    # #     config.lambda_div = 10.0
+    # #     config.use_diversity_sampling = True
+    # #     config.generator_lr = 0.0001
+    # #     config.discriminator_lr = 0.0001
+    # #     config.discriminator_update_count = 5
+    # #     config.use_spectral_norm_d = True
+    # #     config.use_clipping_d = True
+    # #     config.use_gradient_penalty = False
+    # #     config.normalization_d = None
+    # #     config.dataset_size = 10
+    # #     models_dict = get_models(game, config)
+    # #     trainer = Trainer(game, models_dict, config)
+    # #     trainer.train()
+
+    # for i in range(3):
+    #     game = Mario()
+    #     config = cfg.MarioConfig()
+    #     config.set_env(game)
+    #     config.seed = i
+    #     config.bootstrap = 'smart'
+    #     config.div_loss = 'l1'
+    #     config.lambda_div = 10.0
+    #     config.use_diversity_sampling = True
+    #     config.generator_lr = 0.0001
+    #     config.discriminator_lr = 0.0001
+    #     config.discriminator_update_count = 5
+    #     config.use_spectral_norm_d = True
+    #     config.use_clipping_d = True
+    #     config.use_gradient_penalty = False
+    #     config.normalization_d = None
+    #     config.dataset_size = 10
+    #     models_dict = get_models(game, config)
+    #     trainer = Trainer(game, models_dict, config)
+    #     trainer.train()

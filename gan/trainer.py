@@ -15,10 +15,11 @@ from .game.env import Game
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 from .dataset import LevelDataset
 from .level_dataset_extend import prepare_dataset
-from .config import DataExtendConfig, BaseConfig
+from .config import BaseConfig
 from .utils import (
     kmeans_select
 )
+from .models.general_models import Generator, Discriminator
 
 
 class Trainer:
@@ -46,37 +47,41 @@ class Trainer:
         # Dataset
         prepare_dataset(
             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
+
+        if self.config.is_augmentation:
+            generated_levels_path = self.config.generated_data_path
+            if os.path.exists(generated_levels_path):
+                shutil.rmtree(generated_levels_path)
+            os.makedirs(generated_levels_path)
+
         self.dataset = LevelDataset(
             config.level_data_path,
             self.game,
             latent_size=config.latent_size,
             use_diversity_sampling=config.use_diversity_sampling,
+            initial_data_prob=config.initial_data_prob,
+            initial_data_sampling_steps=config.initial_data_sampling_steps,
             seed=config.seed
         )
 
-        similarities = []
-        for i in range(len(self.dataset.data)):
-            for j in range(i + 1, len(self.dataset.data)):
-                level1 = self.dataset.data[i].representation
-                level2 = self.dataset.data[j].representation
-                similarities.append(self.game.check_similarity(level1, level2))
+        if self.config.bootstrap:
+            similarities = []
+            for i in range(len(self.dataset.data)):
+                for j in range(i + 1, len(self.dataset.data)):
+                    level1 = self.dataset.data[i].representation
+                    level2 = self.dataset.data[j].representation
+                    similarities.append(
+                        self.game.check_similarity(level1, level2))
 
-        similarities_mean = statistics.mean(similarities)
-        similarities_stdev = statistics.stdev(similarities)
-
-        self.hamming_filter_threshold = config.bootstrap_hamming_filter if self.config.bootstrap_hamming_filter else similarities_mean + 3 * similarities_stdev
-        print("Hamming Filter :", self.hamming_filter_threshold)
+            similarities_mean = statistics.mean(similarities)
+            similarities_stdev = statistics.stdev(similarities)
+            self.hamming_filter_threshold = config.bootstrap_hamming_filter if self.config.bootstrap_hamming_filter else similarities_mean + 3 * similarities_stdev
+            print("Hamming Filter :", self.hamming_filter_threshold)
 
         # Dataset files
         self.dataset_files = os.listdir(self.dataset.level_dir)
         print("Training Dataset :", self.dataset.level_dir)
         self.dataset_properties_dicts = self._init_dataset_properties()
-
-        if isinstance(self.config, DataExtendConfig):
-            generated_levels_path = self.config.generated_data_path
-            if os.path.exists(generated_levels_path):
-                shutil.rmtree(generated_levels_path)
-            os.makedirs(generated_levels_path)
 
         # Level Visualizer
         if self.game.name == 'mario':
@@ -114,9 +119,8 @@ class Trainer:
         print(f"image_save_epoch:{self.image_save_epoch}")
         print(f"eval_epoch:{self.eval_epoch}")
         print(f"bootstrap_epoch:{self.bootstrap_epoch}")
-        if isinstance(self.config, DataExtendConfig):
-            self.reset_epoch = self.config.reset_weight_epoch
-            print(f"model_reset_epoch:{self.reset_epoch}")
+        if self.config.is_augmentation == True:
+            print(f"model_reset_epoch:{self.config.reset_weight_epoch}")
             self.last_reset_steps = 0
             self.training_set_reset_count = 0
 
@@ -152,7 +156,7 @@ class Trainer:
                 ### Discriminator Update ###
                 for _ in range(self.config.discriminator_update_count):
                     latent, real, label = self.dataset.sample(
-                        batch_size=self.config.train_batch_size)
+                        batch_size=self.config.train_batch_size, step=self.step)
                     latent, real, label = (
                         latent.to(self.device).float(),
                         real.to(self.device).float(),
@@ -226,14 +230,14 @@ class Trainer:
                         unique_playable_levels)
 
                 # initialize process in augmentation model
-                if isinstance(self.config, DataExtendConfig):
+                if self.config.is_augmentation == True:
                     # 一定数生成したらGANの重みリセット
                     if self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
                         print("reset weights of model.")
                         self._save_images()
                         # if self.config.use_recon_loss:
                         #     self._save_recon_images(real, label)
-                        self._build_model()
+                        self._reset_model()
                         self.last_reset_steps = self.step
                         self.bootstrap_count = 0
                     # 一定数生成したら学習データリセット
@@ -251,7 +255,7 @@ class Trainer:
                     if self.step - self.last_reset_steps >= self.config.reset_weight_epoch:
                         print(
                             f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
-                        self._build_model()
+                        self._reset_model()
                         self.last_reset_steps = self.step
 
                     # 全体である程度生成したらデータ拡張ストップ
@@ -260,6 +264,22 @@ class Trainer:
                             f"Generated size exceeds {self.augmented_data_index}, so stop generation.")
                         return False
         return True
+
+    def _reset_model(self):
+        self.generator = Generator(
+            isize=self.game.input_shape[1], nz=self.config.latent_size, nc=self.game.input_shape[
+                0], ngf=self.config.generator_filters, self_attention=self.config.use_self_attention_g, n_extra_layers=self.config.extra_layers_g
+        ).to(self.device)
+        self.discriminator = Discriminator(
+            isize=self.game.input_shape[1], nz=self.config.latent_size, nc=self.game.input_shape[
+                0], ndf=self.config.discriminator_filters, use_self_attention=self.config.use_self_attention_d, use_spectral_norm=self.config.use_spectral_norm_d, normalization=self.config.normalization_d, use_recon_loss=self.config.use_recon_loss, n_extra_layers=self.config.extra_layers_d
+        ).to(self.device)
+        self.optimizer_g = torch.optim.RMSprop(
+            self.generator.parameters(), lr=self.config.generator_lr
+        )
+        self.optimizer_d = torch.optim.RMSprop(
+            self.discriminator.parameters(), lr=self.config.discriminator_lr
+        )
 
     def _generate_levels(self, latents: torch.Tensor, labels: torch.Tensor):
         level_tensor, _ = self.generator(latents, labels)
@@ -379,30 +399,30 @@ class Trainer:
 
             print(f"Filtered by Hamming: {len(filtered_levels)}")
 
-            # プロパティフィルタ
-            if self.config.bootstrap_property_filter is not None:
-                tmp_levels = []
-                for level_str in filtered_levels:
-                    features = self.game.get_features(level_str)
-                    ok = True
-                    for i, pd in enumerate(self.dataset_properties_dicts):
-                        if (features[i] in pd) and (pd[features[i]] >= self.dataset.data_length * self.config.bootstrap_property_filter):
-                            print(
-                                f"{pd[features[i]]} >= {self.dataset.data_length * self.config.bootstrap_property_filter}")
-                            ok = False
-                    if ok:
-                        tmp_levels.append(level_str)
+            # # プロパティフィルタ
+            # if self.config.bootstrap_property_filter is not None:
+            #     tmp_levels = []
+            #     for level_str in filtered_levels:
+            #         features = self.game.get_features(level_str)
+            #         ok = True
+            #         for i, pd in enumerate(self.dataset_properties_dicts):
+            #             if (features[i] in pd) and (pd[features[i]] >= self.dataset.data_length * self.config.bootstrap_property_filter):
+            #                 print(
+            #                     f"{pd[features[i]]} >= {self.dataset.data_length * self.config.bootstrap_property_filter}")
+            #                 ok = False
+            #         if ok:
+            #             tmp_levels.append(level_str)
 
-                filtered_levels = tmp_levels
-            else:
-                pass
+            #     filtered_levels = tmp_levels
+            # else:
+            #     pass
 
             print("Property : ")
             for feature, v in self.dataset.feature2indices.items():
                 print(f"{feature}={len(v)} , ", end="")
             print()
-            print(f"Filtered by features: {len(filtered_levels)}")
-            print()
+            # print(f"Filtered by features: {len(filtered_levels)}")
+            # print()
 
             # K-meansで選択
             if self.config.bootstrap_kmeans_filter and len(filtered_levels) > 1:
@@ -420,7 +440,7 @@ class Trainer:
             self._level_add(level)
             self.bootstrap_count += 1
             # generatedフォルダにも追加
-            if isinstance(self.config, DataExtendConfig):
+            if self.config.is_augmentation == True:
                 with open(
                     os.path.join(self.config.generated_data_path, f"{self.config.env_name}_{self.augmented_data_index}"), mode="w"
                 ) as f:

@@ -20,7 +20,7 @@ class LevelItem:
 
 
 class LevelDataset(Dataset):
-    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32, use_diversity_sampling=False, seed=0):
+    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32, use_diversity_sampling=False, initial_data_prob=0.0, initial_data_sampling_steps=None, seed=0):
         random.seed(seed)
         np.random.seed(seed)
         self.game = game
@@ -28,8 +28,9 @@ class LevelDataset(Dataset):
         self.latent_size = latent_size
         self.use_diversity_sampling = use_diversity_sampling
         self.initial_dataset_size = 0
-        self.select_initial_data_prob = 0.0
+        self.select_initial_data_prob = initial_data_prob
         self.data_noise_coef = 0.00
+        self.initial_data_sampling_steps = initial_data_sampling_steps
         self.initialize()
 
     def initialize(self):
@@ -68,7 +69,7 @@ class LevelDataset(Dataset):
         self.data.append(item)
         self.data_length = len(self.data)
 
-    def sample(self, batch_size: int):
+    def sample(self, batch_size: int, step=None):
         latent_batch = torch.zeros((batch_size, self.latent_size))
         level_batch = torch.zeros((batch_size, *self.game.input_shape))
         label_batch = torch.zeros((batch_size, self.game.input_shape[0]))
@@ -79,7 +80,7 @@ class LevelDataset(Dataset):
                 idx = np.random.choice(self.feature2indices[list(
                     self.feature2indices.keys())[key_index]])
                 # 初期データの割合が低くなり始めたら初期データ選択確率を保証
-                if self.initial_dataset_size/self.data_length < self.select_initial_data_prob and np.random.random() < self.select_initial_data_prob:
+                if step and self.initial_data_sampling_steps and step < self.initial_data_sampling_steps and self.initial_dataset_size / self.data_length < self.select_initial_data_prob and np.random.random() < self.select_initial_data_prob:
                     idx = np.random.randint(self.initial_dataset_size)
                     item = self.data[idx]
                 else:
