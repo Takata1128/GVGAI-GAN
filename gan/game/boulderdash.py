@@ -35,35 +35,40 @@ class Boulderdash(Game):
                     hit += 1
             return hit
 
-        def check_level_object_duprecated(level1: str, level2: str):
-            g, a, all = 0, 0, 0
-            for c1, c2 in zip(level1, level2):
-                if c1 == "\n":
-                    continue
-                if c1 == 'e' and c1 == c2:
-                    g = 1
-                if c1 == 'A' and c1 == c2:
-                    a = 1
-            if g and a:
-                all = 1
-            return g, a, all
+        # def check_level_object_duprecated(level1: str, level2: str):
+        #     g, a, all = 0, 0, 0
+        #     for c1, c2 in zip(level1, level2):
+        #         if c1 == "\n":
+        #             continue
+        #         if c1 == 'e' and c1 == c2:
+        #             g = 1
+        #         if c1 == 'A' and c1 == c2:
+        #             a = 1
+        #     if g and a:
+        #         all = 1
+        #     return g, a, all
 
-        goal_duplication, player_duplication, total_object_duplication, total_hamming_dist, n = 0, 0, 0, 0, 0
         levels_small_set = playable_levels[:1000]
+        total_hamming_dist, features_duplication, n = 0, 0, 0
         similarity_threshold_list = [0.60, 0.65,
                                      0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
         duplication_rate_list = [0 for i in range(
             len(similarity_threshold_list))]
 
+        features_dict = {}
+
         for i in range(len(levels_small_set)):
+            i_features = self.get_features(levels_small_set[i])
+            if i_features not in features_dict:
+                features_dict[i_features] = 1
+            else:
+                features_dict[i_features] += 1
+
             for j in range(len(levels_small_set)):
                 if i <= j:
                     continue
-                gd, pd, sod = check_level_object_duprecated(
-                    levels_small_set[i], levels_small_set[j])
-                goal_duplication += gd
-                player_duplication += pd
-                total_object_duplication += sod
+                j_features = self.get_features(levels_small_set[j])
+                features_duplication += 1 if (i_features == j_features) else 0
                 hamming = check_level_hamming(
                     levels_small_set[i], levels_small_set[j])
                 total_hamming_dist += hamming
@@ -76,22 +81,25 @@ class Boulderdash(Game):
             duplication_rate_list[i] /= n
 
         unique_levels = list(set(playable_levels))
+
         metrics = {}
-        metrics["Final Duplication Rate"] = 1 - \
+        metrics['wandb'] = {}
+        metrics['other'] = {}
+        metrics['wandb']["Final Duplication Rate"] = 1 - \
             len(unique_levels) / len(playable_levels)
-        metrics["Hamming Distance"] = total_hamming_dist / n
-        metrics["Object Duplication Rate"] = total_object_duplication / n
-        metrics["Goal Duplication Rate"] = goal_duplication / n
-        metrics["Player Duplication Rate"] = player_duplication / n
-        data = [[x, y] for (x, y) in zip(
-            similarity_threshold_list, duplication_rate_list)]
-        table = wandb.Table(data=data, columns=['rate', 'duplications'])
-        metrics[r'X% Duplication Rate'] = wandb.plot.line(
-            table, 'rate', 'duplications')
-        print("Final Duplication Rate:", 1 -
-              len(unique_levels) / len(playable_levels))
+        print("Duplication Rate:", 1 - len(unique_levels) / len(playable_levels))
+        metrics['wandb']["Hamming Distance"] = total_hamming_dist / n
         print("Hamming Distance:", total_hamming_dist / n)
-        print("Obj Duplication Rate:", total_object_duplication / n)
+        # data = [[x, y] for (x, y) in zip(
+        #     similarity_threshold_list, duplication_rate_list)]
+        # table = wandb.Table(data=data, columns=['rate', 'duplications'])
+        # wandb_metrics[r'X% Duplication Rate'] = wandb.plot.line(
+        #     table, 'rate', 'duplications')
+        # wandb_metrics[r'X% Duplication Rate']
+        metrics['wandb']["Features Duplication Rate"] = features_duplication / n
+        metrics['wandb']["Features Type Nums"] = len(features_dict)
+        metrics['other'][r'X% Duplication Rate'] = (
+            similarity_threshold_list, duplication_rate_list)
 
         return metrics
 
@@ -107,7 +115,6 @@ class Boulderdash(Game):
                 # まわりは壁
                 if (i == 0 or i >= self.height - 1 or j == 0 or j >= self.width - 1) and g[i][j] != "w":
                     ok = False
-
                 # 必要なオブジェクト
                 if g[i][j] == "A":
                     sx, sy = i, j

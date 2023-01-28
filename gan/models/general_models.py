@@ -222,6 +222,8 @@ class Discriminator(nn.Module):
         if self.use_recon_loss:
             self.decoder = Decoder(isize, nz, nc, ndf)
 
+        # self.apply(self._init_weights)
+
     def normalization_layer(self, normalization: str, num_features: int, layer_shape: list[int]):
         if normalization is None:
             return nn.Identity()
@@ -233,6 +235,19 @@ class Discriminator(nn.Module):
             return nn.LayerNorm(layer_shape)
         else:
             raise NotImplementedError()
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
+            nn.init.kaiming_normal_(
+                module.weight, mode="fan_out", nonlinearity="leaky_relu")
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+        elif isinstance(module, nn.BatchNorm2d):
+            nn.init.constant_(module.weight, 1)
+            nn.init.constant_(module.bias, 0)
+        elif isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, 0, 0.01)
+            nn.init.constant_(module.bias, 0)
 
     def forward(self, input, label=None):
         hidden = self.main(input)
@@ -299,8 +314,8 @@ class Generator(nn.Module):
             main = nn.Sequential()
             main.add_module('extra-layers-{0}_{1}_conv'.format(t, cngf),
                             nn.Conv2d(cngf, cngf, 3, 1, 1, bias=False))
-            # main.add_module('extra-layers-{0}_{1}_batchnorm'.format(t, cngf),
-            #                 nn.BatchNorm2d(cngf))
+            main.add_module('extra-layers-{0}_{1}_batchnorm'.format(t, cngf),
+                            nn.BatchNorm2d(cngf))
             main.add_module('extra-layers-{0}_{1}_relu'.format(t, cngf),
                             nn.ReLU(True))
             self.mods.append(main)
@@ -319,6 +334,20 @@ class Generator(nn.Module):
 
         self.mods.append(main)
         self.mods = nn.ModuleList(self.mods)
+        # self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
+            nn.init.kaiming_normal_(
+                module.weight, mode="fan_out", nonlinearity="relu")
+            if module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+        elif isinstance(module, nn.BatchNorm2d):
+            nn.init.constant_(module.weight, 1)
+            nn.init.constant_(module.bias, 0)
+        elif isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, 0, 0.01)
+            nn.init.constant_(module.bias, 0)
 
     def forward(self, input, label=None):
         hidden = input.reshape(*input.shape, 1, 1)

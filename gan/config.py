@@ -13,9 +13,6 @@ class BaseConfig:
     env_name: str = "zelda"
     env_version: str = 'v1'
 
-    # augmentation settings
-    is_augmentation: bool = False
-
     # model architecture
     latent_size: int = 32  # latent dims for generation
     generator_filters: int = 64
@@ -38,8 +35,8 @@ class BaseConfig:
 
     # learning parameters
     adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "l1"  # ["l1","l2","none"]
-    lambda_div: float = 10.0
+    div_loss: str = "l1-latent"  # ["l1","l2","none"]
+    lambda_div: float = 0.1
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
     use_gradient_penalty: bool = False
@@ -48,28 +45,31 @@ class BaseConfig:
     discriminator_lr: float = 0.0001
     discriminator_update_count: int = 5
     train_batch_size: int = 32  # training batch size
-    steps: int = 5000 * (train_batch_size // 32)  # training steps
-
-    # others parameters
-    seed: int = 0  # random seed
-    cuda: bool = True  # use cuda
-    gpu_id: int = 3  # gpu index
+    steps: int = 5000  # training steps
 
     # dataset parameters
     bootstrap: str = "smart"  # ["none", "random", "smart"]
     dataset_size: int = 5
     clone_data: bool = False
     flip_data: bool = False
-    initial_data_prob: int = 0.0
-    initial_data_sampling_steps: int = None
+    initial_data_prob: int = 0
+    initial_data_sampling_steps: int = 5000
     dataset_max_change_count: int = 5
     bootstrap_hamming_filter: float = None
     bootstrap_kmeans_filter: bool = True
-    use_diversity_sampling: bool = False
+    use_diversity_sampling: bool = True
     bootstrap_max_count: int = 10
-
     eval_playable_counts: int = 128  # number of z to check playable.
     final_evaluation_levels: int = 15000
+
+    # others parameters
+    seed: int = 0  # random seed
+    cuda: bool = True  # use cuda
+    gpu_id: int = 3  # gpu index
+    save_model_epoch: int = 10000
+    save_image_epoch: int = 100
+    eval_epoch: int = 100
+    bootstrap_epoch: int = 10
 
     def set_env(self, game: Game):
         self.env_name = game.name

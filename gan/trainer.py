@@ -17,7 +17,8 @@ from .dataset import LevelDataset
 from .level_dataset_extend import prepare_dataset
 from .config import BaseConfig
 from .utils import (
-    kmeans_select
+    kmeans_select,
+    diversity_select
 )
 from .models.general_models import Generator, Discriminator
 
@@ -48,12 +49,6 @@ class Trainer:
         prepare_dataset(
             game, seed=config.seed, extend_data=config.clone_data, flip=config.flip_data, dataset_size=config.dataset_size)
 
-        if self.config.is_augmentation:
-            generated_levels_path = self.config.generated_data_path
-            if os.path.exists(generated_levels_path):
-                shutil.rmtree(generated_levels_path)
-            os.makedirs(generated_levels_path)
-
         self.dataset = LevelDataset(
             config.level_data_path,
             self.game,
@@ -64,19 +59,16 @@ class Trainer:
             seed=config.seed
         )
 
-        if self.config.bootstrap:
-            similarities = []
-            for i in range(len(self.dataset.data)):
-                for j in range(i + 1, len(self.dataset.data)):
-                    level1 = self.dataset.data[i].representation
-                    level2 = self.dataset.data[j].representation
-                    similarities.append(
-                        self.game.check_similarity(level1, level2))
-
-            similarities_mean = statistics.mean(similarities)
-            similarities_stdev = statistics.stdev(similarities)
-            self.hamming_filter_threshold = config.bootstrap_hamming_filter if self.config.bootstrap_hamming_filter else similarities_mean + 3 * similarities_stdev
-            print("Hamming Filter :", self.hamming_filter_threshold)
+        similarities = []
+        for i in range(len(self.dataset.data)):
+            for j in range(i + 1, len(self.dataset.data)):
+                level1 = self.dataset.data[i].representation
+                level2 = self.dataset.data[j].representation
+                similarities.append(
+                    self.game.check_similarity(level1, level2))
+        similarities_mean = statistics.mean(similarities)
+        similarities_stdev = statistics.stdev(similarities)
+        self.hamming_filter_threshold = config.bootstrap_hamming_filter if self.config.bootstrap_hamming_filter else similarities_mean + 3 * similarities_stdev
 
         # Dataset files
         self.dataset_files = os.listdir(self.dataset.level_dir)
@@ -119,20 +111,18 @@ class Trainer:
         print(f"image_save_epoch:{self.image_save_epoch}")
         print(f"eval_epoch:{self.eval_epoch}")
         print(f"bootstrap_epoch:{self.bootstrap_epoch}")
-        if self.config.is_augmentation == True:
-            print(f"model_reset_epoch:{self.config.reset_weight_epoch}")
-            self.last_reset_steps = 0
-            self.training_set_reset_count = 0
 
     def train(self):
         wandb.login()
         metrics = {}
-        with wandb.init(project=f"Generation of {self.config.env_fullname} Level by GAN", config=self.config.__dict__):
+        with wandb.init(project=f"Experiments of generation of {self.config.env_fullname}", config=self.config.__dict__):
             # check model summary
             self.generator.summary(
                 batch_size=self.config.train_batch_size, device=self.device)
             self.discriminator.summary(
                 batch_size=self.config.train_batch_size, device=self.device)
+
+            print("Hamming Filter :", self.hamming_filter_threshold)
 
             # model_save_path
             self.model_save_path = os.path.join(
@@ -185,8 +175,9 @@ class Trainer:
                 wandb.log(metrics, step=self.step)
                 if not self.after_step(real, label):
                     break
-            self._evaluation()
+            evaluation_result = self._evaluation()
             self._save_models(self.model_save_path, None, None)
+            return evaluation_result
 
     def after_step(self, real_images: torch.Tensor, labels: torch.Tensor):
         self.generator.eval()
@@ -213,56 +204,18 @@ class Trainer:
                         / self.config.eval_playable_counts
                     }, step=self.step
                 )
-
                 # eval
                 if self.step % self.eval_epoch == 0:
                     self._eval_models(levels, playable_levels)
-
                 # save model
                 if self.step % self.model_save_epoch == 0:
                     self._save_models(
                         self.model_save_path, self.step, None)
-
                 # bootstrap
                 unique_playable_levels = list(set(playable_levels))
                 if self.step % self.bootstrap_epoch == 0 and self.config.bootstrap is not None and len(unique_playable_levels) > 1:
                     unique_playable_levels = self._bootstrap(
                         unique_playable_levels)
-
-                # initialize process in augmentation model
-                if self.config.is_augmentation == True:
-                    # 一定数生成したらGANの重みリセット
-                    if self.bootstrap_count >= self.config.reset_weight_bootstrap_count:
-                        print("reset weights of model.")
-                        self._save_images()
-                        # if self.config.use_recon_loss:
-                        #     self._save_recon_images(real, label)
-                        self._reset_model()
-                        self.last_reset_steps = self.step
-                        self.bootstrap_count = 0
-                    # 一定数生成したら学習データリセット
-                    if self.augmented_data_index > self.config.reset_train_dataset_th * (self.training_set_reset_count + 1):
-                        print(
-                            f"Generated size exceeds {self.augmented_data_index}, so reset training dataset.")
-                        self.training_set_reset_count += 1
-                        prepare_dataset(
-                            self.game, seed=self.config.seed, extend_data=self.config.clone_data, flip=self.config.flip_data
-                        )
-                        # initialize dataset
-                        self.dataset.initialize()
-
-                    # 一定期間たったらモデルを強制リセット
-                    if self.step - self.last_reset_steps >= self.config.reset_weight_epoch:
-                        print(
-                            f"reset weights of model. {self.step-self.last_reset_steps} steps progressed.")
-                        self._reset_model()
-                        self.last_reset_steps = self.step
-
-                    # 全体である程度生成したらデータ拡張ストップ
-                    if self.augmented_data_index >= self.config.stop_generate_count:
-                        print(
-                            f"Generated size exceeds {self.augmented_data_index}, so stop generation.")
-                        return False
         return True
 
     def _reset_model(self):
@@ -376,21 +329,15 @@ class Trainer:
             result_levels = kmeans_select(
                 unique_playable_levels, self.config, self.game)
         elif self.config.bootstrap == "smart":  # データセット内のステージと比較して類似度が低いもののみを追加
-            # 類似度フィルタ
-            # if self.config.bootstrap_hamming_filter == None:
-            #     filtered_levels = unique_playable_levels
-            # else:
-            # データセットのレベルたち
-            dataset_levels = []
-            for item in self.dataset.data:
-                dataset_levels.append(item.representation)
             filtered_levels = []
             for generated_level in unique_playable_levels:
                 dup = False
-                for ds_level in dataset_levels:
+                dataset_levels = self.dataset.data
+                # dataset_levels = np.random.choice(self.dataset.data, min(
+                #     len(self.dataset.data), 50), replace=False)
+                for item in dataset_levels:
                     sim = self.game.check_similarity(
-                        generated_level, ds_level)
-                    # if sim >= self.config.bootstrap_hamming_filter:
+                        generated_level, item.representation)
                     if sim >= self.hamming_filter_threshold:
                         dup = True
                         break
@@ -417,35 +364,28 @@ class Trainer:
             # else:
             #     pass
 
-            print("Property : ")
-            for feature, v in self.dataset.feature2indices.items():
-                print(f"{feature}={len(v)} , ", end="")
-            print()
-            # print(f"Filtered by features: {len(filtered_levels)}")
-            # print()
-
             # K-meansで選択
             if self.config.bootstrap_kmeans_filter and len(filtered_levels) > 1:
                 result_levels = kmeans_select(
                     filtered_levels, self.config, self.game)
             else:
-                result_levels = filtered_levels
+                result_levels = diversity_select(
+                    filtered_levels, self.config, self.game, self.dataset.feature2indices)
         else:
             raise NotImplementedError(
                 f'{self.config.bootstrap} bootstrap is not implemented!!')
+
+        print("Property : ")
+        for feature, v in self.dataset.feature2indices.items():
+            print(f"{feature}={len(v)} , ", end="")
+        print()
+
         # 多すぎないように
         selected = random.sample(
             result_levels, min(len(result_levels), self.config.bootstrap_max_count))
         for level in selected:
             self._level_add(level)
             self.bootstrap_count += 1
-            # generatedフォルダにも追加
-            if self.config.is_augmentation == True:
-                with open(
-                    os.path.join(self.config.generated_data_path, f"{self.config.env_name}_{self.augmented_data_index}"), mode="w"
-                ) as f:
-                    f.write(level)
-                    self.augmented_data_index += 1
         wandb.log({"Dataset Size": len(self.dataset_files)}, self.step)
         # Update dataset
         return selected
@@ -623,6 +563,7 @@ class Trainer:
             metrics = self.game.evaluation(playable_levels)
         else:
             metrics = {}
+            metrics['wandb'] = {}
 
         playable_levels = []
         latents_for_eval, _, labels_for_eval = self.dataset.sample(
@@ -634,12 +575,12 @@ class Trainer:
         for level_str in level_strs:
             if self.game.check_playable(level_str):
                 playable_levels.append(level_str)
-
-        metrics["Final Playable Rate"] = len(
+        metrics['wandb']["Final Playable Rate"] = len(
             playable_levels) / self.config.final_evaluation_levels
         print("Playable Rate:", len(playable_levels) /
               self.config.final_evaluation_levels)
-        wandb.log(metrics)
+        wandb.log(metrics['wandb'])
+        return metrics
 
     def _init_dataset_properties(self):
         ret = []

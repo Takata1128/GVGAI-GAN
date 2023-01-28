@@ -25,28 +25,33 @@ def d_loss(real_logits: torch.Tensor, fake_logits: torch.Tensor, smooth_label_va
 def g_loss(fake_logits: torch.Tensor):
     ones = torch.ones(len(fake_logits)).to(device=fake_logits.device)
     p_fake = torch.sigmoid(fake_logits)
-
     generator_loss = torch.nn.BCELoss()(p_fake, ones)
-
     return generator_loss
 
 
 def div_loss(latent: torch.Tensor, fake: torch.Tensor, hiddens: list[torch.Tensor], loss_type: str, lambda_div=1.0, game: Game = None):
-    first = fake[1:, :, :game.height, :game.width]
-    second = fake[:-1, :, :game.height, :game.width]
-
+    if loss_type is None:
+        return torch.tensor(0)
+    ls = latent.size(0)
+    first = fake[:ls // 2, :, :game.height, :game.width]
+    second = fake[ls // 2:, :, :game.height, :game.width]
     if loss_type == "l1":
-        return -torch.abs(first - second).mean() * lambda_div
+        # return -torch.abs(first - second).mean() * lambda_div
+        lz = torch.abs(first - second).mean()
+        eps = 1 * 1e-5
+        return (1 / (lz + eps)) * lambda_div
     elif loss_type == 'l1-hidden':
         return -torch.abs(hiddens[1][1:] - hiddens[1][:-1]).mean() * lambda_div
     elif loss_type == 'l1-hidden-latent':
         return -torch.abs(hiddens[1][1:] - hiddens[1][:-1]).mean() / torch.abs(latent[1:] - latent[:-1]).mean() * lambda_div
     elif loss_type == 'l1-latent':
-        return -(torch.abs(first - second).mean() / torch.abs(latent[1:] - latent[:-1]).mean()) * lambda_div
+        # return -(torch.abs(first - second).mean() / torch.abs(latent[:ls // 2] - latent[ls // 2:]).mean()) * lambda_div
+        lz = torch.abs(first - second).mean() / \
+            torch.abs(latent[:ls // 2] - latent[ls // 2:]).mean()
+        eps = 1 * 1e-5
+        return (1 / (lz + eps)) * lambda_div
     elif loss_type == "l2":
         return -((first - second) ** 2).mean() * lambda_div
-    elif loss_type is None:
-        return torch.tensor(0)
     else:
         raise NotImplementedError()
 

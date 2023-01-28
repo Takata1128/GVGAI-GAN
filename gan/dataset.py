@@ -80,9 +80,17 @@ class LevelDataset(Dataset):
                 idx = np.random.choice(self.feature2indices[list(
                     self.feature2indices.keys())[key_index]])
                 # 初期データの割合が低くなり始めたら初期データ選択確率を保証
-                if step and self.initial_data_sampling_steps and step < self.initial_data_sampling_steps and self.initial_dataset_size / self.data_length < self.select_initial_data_prob and np.random.random() < self.select_initial_data_prob:
-                    idx = np.random.randint(self.initial_dataset_size)
-                    item = self.data[idx]
+                if self.select_initial_data_prob and self.initial_dataset_size / self.data_length < self.select_initial_data_prob:
+                    if step and self.initial_data_sampling_steps and step > self.initial_data_sampling_steps:
+                        # 規定のステップ数を超えたらランダム選択
+                        item = np.random.choice(self.data)
+                    else:
+                        if np.random.random() < self.select_initial_data_prob:
+                            idx = np.random.randint(
+                                self.initial_dataset_size)  # 初期データセットの中からランダム選択
+                            item = self.data[idx]
+                        else:
+                            item = np.random.choice(self.data)
                 else:
                     item = np.random.choice(self.data)
                 item = self.data[idx]

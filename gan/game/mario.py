@@ -16,14 +16,14 @@ class Mario(Game):
 
     def check_playable(self, lvl_str: str):
         g = lvl_str.split()
-        if not self._check_pipe(g):
+        if not self._check_tile_constraint(g):
             return False
 
-        if not self._check_teritory(g):
-            return False
+        # if not self._check_teritory(g):
+        #     return False
 
-        if not self._check_tile_balance(g):
-            return False
+        # if not self._check_tile_balance(g):
+        #     return False
 
         ok, _ = self._check_reachable(g)
         if not ok:
@@ -43,7 +43,6 @@ class Mario(Game):
                     break
             if sx != -1:
                 break
-
         if sx == -1:
             return False
 
@@ -68,13 +67,27 @@ class Mario(Game):
                     ok = False
         return ok
 
-    def _check_pipe(self, g: list[str]):
+    def _check_tile_constraint(self, g: list[str]):
         '''
-        土管が壊れていないかチェック        
+        土管が壊れていないかチェック
+        地面ブロックが浮いていないかチェック     
         '''
         ok = True
         for i, row in enumerate(g[:self.height]):
             for j, c in enumerate(row[:self.width]):
+                if c == 'X':
+                    # is_connected = False
+                    if i != self.height - 1 and (g[i + 1][j] != 'X'):
+                        ok = False
+                        # is_connected = True
+                    # if not is_connected and i != 0 and (g[i - 1][j] == 'X'):
+                    #     is_connected = True
+                    # if not is_connected and j != self.width - 1 and (g[i][j + 1] == 'X'):
+                    #     is_connected = True
+                    # if not is_connected and j != 0 and (g[i][j - 1] == 'X'):
+                    #     is_connected = True
+                    # if not is_connected:
+                    #     ok = False
                 if c == '<':
                     if j != self.width - 1 and g[i][j + 1] != '>':
                         ok = False
@@ -99,6 +112,8 @@ class Mario(Game):
                         ok = False
                     if i != 0 and (g[i - 1][j] not in [']', '>']):
                         ok = False
+                if not ok:
+                    return False
         return ok
 
     def _check_tile_balance(self, g: list[str]):
@@ -203,14 +218,12 @@ class Mario(Game):
                             continue
                         visited[target_y][target_x] = 1
                         que.append((target_y, target_x))
-
         # 後ろの方に到達可能か
         reachable = False
         for x in range(self.width - 4, self.width):
             for y in range(self.height):
                 if visited[y][x] == 1:
                     reachable = True
-
         if reachable:
             ok = True
 
@@ -234,14 +247,20 @@ class Mario(Game):
 
     def get_features(self, level: str):
         g = level.split()
-        num_pipe, num_hole = 0, 0
+        num_pipe, num_hole, num_rock, num_enemy = 0, 0, 0, 0
         for i in range(self.height):
             for j in range(self.width):
                 if i == self.height - 1 and g[i][j] == '-':
                     num_hole += 1
                 if g[i][j] == '<':
                     num_pipe += 1
-        return (num_pipe, num_hole // 3)
+                if g[i][j] == 'X':
+                    num_rock += 1
+                if g[i][j] == 'E':
+                    num_enemy += 1
+        return (num_pipe, num_hole // 3, num_enemy // 3)
+
+        # return (num_pipe, num_hole // 3, num_rock // 20)
 
     def evaluation(self, playable_levels: list[str]):
         def check_level_hamming(level1: str, level2: str):
@@ -256,16 +275,26 @@ class Mario(Game):
             return hit
 
         levels_small_set = playable_levels[:1000]
-        total_hamming_dist, n = 0, 0
+        total_hamming_dist, features_duplication, n = 0, 0, 0
         similarity_threshold_list = [0.60, 0.65,
                                      0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
         duplication_rate_list = [0 for i in range(
             len(similarity_threshold_list))]
 
+        features_dict = {}
+
         for i in range(len(levels_small_set)):
+            i_features = self.get_features(levels_small_set[i])
+            if i_features not in features_dict:
+                features_dict[i_features] = 1
+            else:
+                features_dict[i_features] += 1
+
             for j in range(len(levels_small_set)):
                 if i <= j:
                     continue
+                j_features = self.get_features(levels_small_set[j])
+                features_duplication += 1 if (i_features == j_features) else 0
                 hamming = check_level_hamming(
                     levels_small_set[i], levels_small_set[j])
                 total_hamming_dist += hamming
@@ -280,14 +309,21 @@ class Mario(Game):
         unique_levels = list(set(playable_levels))
 
         metrics = {}
-        metrics["Final Duplication Rate"] = 1 - \
+        metrics['wandb'] = {}
+        metrics['other'] = {}
+        metrics['wandb']["Final Duplication Rate"] = 1 - \
             len(unique_levels) / len(playable_levels)
-        metrics["Hamming Distance"] = total_hamming_dist / n
-        data = [[x, y] for (x, y) in zip(
-            similarity_threshold_list, duplication_rate_list)]
-        table = wandb.Table(data=data, columns=['rate', 'duplications'])
-        metrics[r'X% Duplication Rate'] = wandb.plot.line(
-            table, 'rate', 'duplications')
         print("Duplication Rate:", 1 - len(unique_levels) / len(playable_levels))
+        metrics['wandb']["Hamming Distance"] = total_hamming_dist / n
         print("Hamming Distance:", total_hamming_dist / n)
+        # data = [[x, y] for (x, y) in zip(
+        #     similarity_threshold_list, duplication_rate_list)]
+        # table = wandb.Table(data=data, columns=['rate', 'duplications'])
+        # wandb_metrics[r'X% Duplication Rate'] = wandb.plot.line(
+        #     table, 'rate', 'duplications')
+        # wandb_metrics[r'X% Duplication Rate']
+        metrics['wandb']["Features Duplication Rate"] = features_duplication / n
+        metrics['wandb']["Features Type Nums"] = len(features_dict)
+        metrics['other'][r'X% Duplication Rate'] = (
+            similarity_threshold_list, duplication_rate_list)
         return metrics
