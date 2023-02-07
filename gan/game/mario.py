@@ -258,7 +258,8 @@ class Mario(Game):
                     num_rock += 1
                 if g[i][j] == 'E':
                     num_enemy += 1
-        return (num_pipe, min(3, num_hole // 2), min(3, num_enemy // 3))
+        # return (num_pipe, min(3, num_hole // 2), min(3, num_enemy // 3))
+        return (num_pipe, num_hole // 3, num_enemy // 3)
 
         # return (num_pipe, min(3, num_hole // 2), min(3, num_enemy // 3), num_rock // 10)
 

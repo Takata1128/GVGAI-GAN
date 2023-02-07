@@ -106,90 +106,88 @@ def get_models(game: Game, config: cfg.BaseConfig):
 
 
 if __name__ == "__main__":
-    zelda_exp = Experiments(Zelda('v1'))
-    config = cfg.ZeldaConfig()
-    config.flip_data = True
-    config.bootstrap_hamming_filter = 0.90
-    results = []
+    # zelda_exp = Experiments(Zelda('v1'))
+    # config = cfg.ZeldaConfig()
+    # config.flip_data = True
+    # config.bootstrap_hamming_filter = 0.90
+    # results = []
 
-    config.bootstrap = None
-    config.div_loss = None
-    config.use_diversity_sampling = False
-    result = zelda_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = None
+    # config.div_loss = None
+    # config.use_diversity_sampling = False
+    # result = zelda_exp.run(config, 3)
+    # results.append(result)
 
-    config.bootstrap = 'baseline'
-    config.div_loss = None
-    config.use_diversity_sampling = False
-    result = zelda_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = 'baseline'
+    # config.div_loss = None
+    # config.use_diversity_sampling = False
+    # result = zelda_exp.run(config, 3)
+    # results.append(result)
 
-    config.bootstrap = 'baseline'
-    config.div_loss = None
-    config.use_diversity_sampling = True
-    result = zelda_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = 'baseline'
+    # config.div_loss = None
+    # config.use_diversity_sampling = True
+    # result = zelda_exp.run(config, 3)
+    # results.append(result)
 
-    config.bootstrap = 'smart'
-    config.div_loss = None
-    config.use_diversity_sampling = True
-    result = zelda_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = 'smart'
+    # config.div_loss = None
+    # config.use_diversity_sampling = True
+    # result = zelda_exp.run(config, 3)
+    # results.append(result)
 
-    report(results, ['simple', 'bootstrapping',
-           'diversity sampling', 'ours'], 'zelda_large')
+    # report(results, ['simple', 'bootstrapping',
+    #        'diversity sampling', 'ours'], 'zelda_large')
 
-    boulderdash_exp = Experiments(Boulderdash())
-    config = cfg.BoulderdashConfig()
-    config.flip_data = True
-    config.bootstrap_hamming_filter = 0.85
+    # boulderdash_exp = Experiments(Boulderdash())
+    # config = cfg.BoulderdashConfig()
+    # config.flip_data = True
+    # config.bootstrap_hamming_filter = 0.85
 
-    results = []
+    # results = []
 
-    config.bootstrap = None
-    config.div_loss = None
-    config.use_diversity_sampling = False
-    result = boulderdash_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = None
+    # config.div_loss = None
+    # config.use_diversity_sampling = False
+    # result = boulderdash_exp.run(config, 3)
+    # results.append(result)
 
-    config.bootstrap = 'baseline'
-    config.div_loss = None
-    config.use_diversity_sampling = False
-    result = boulderdash_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = 'baseline'
+    # config.div_loss = None
+    # config.use_diversity_sampling = False
+    # result = boulderdash_exp.run(config, 3)
+    # results.append(result)
 
-    config.bootstrap = 'baseline'
-    config.div_loss = None
-    config.use_diversity_sampling = True
-    result = boulderdash_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = 'baseline'
+    # config.div_loss = None
+    # config.use_diversity_sampling = True
+    # result = boulderdash_exp.run(config, 3)
+    # results.append(result)
 
-    config.bootstrap = 'smart'
-    config.div_loss = None
-    config.use_diversity_sampling = True
-    result = boulderdash_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = 'smart'
+    # config.div_loss = None
+    # config.use_diversity_sampling = True
+    # result = boulderdash_exp.run(config, 3)
+    # results.append(result)
 
-    report(results, ['simple', 'bootstrapping',
-           'diversity sampling', 'ours'], 'boulderdash_large')
+    # report(results, ['simple', 'bootstrapping',
+    #        'diversity sampling', 'ours'], 'boulderdash_large')
 
     mario_exp = Experiments(Mario())
     config = cfg.MarioConfig()
-    config.dataset_size = 174
-    config.bootstrap_hamming_filter = 0.95
     results = []
 
-    config.bootstrap = None
-    config.div_loss = None
-    config.use_diversity_sampling = False
-    result = mario_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = None
+    # config.div_loss = None
+    # config.use_diversity_sampling = False
+    # result = mario_exp.run(config, 3)
+    # results.append(result)
 
-    config.bootstrap = 'baseline'
-    config.div_loss = None
-    config.use_diversity_sampling = False
-    result = mario_exp.run(config, 3)
-    results.append(result)
+    # config.bootstrap = 'baseline'
+    # config.div_loss = None
+    # config.use_diversity_sampling = False
+    # result = mario_exp.run(config, 3)
+    # results.append(result)
 
     config.bootstrap = 'baseline'
     config.div_loss = None
