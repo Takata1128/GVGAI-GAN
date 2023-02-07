@@ -98,6 +98,21 @@ make_another['aliens'] = make_another_aliens
 make_another['roguelike'] = make_another_roguelike
 
 
+def flip_levels(lvl_strs, visualizer):
+    ret = []
+    for lvl_str in lvl_strs:
+        state_tensor, _ = visualizer.game.level_str_to_tensor(lvl_str)
+        state_tensor = torch.unsqueeze(state_tensor, 0)
+        ret.append(visualizer.game.level_tensor_to_strs(state_tensor)[0])
+        ret.append(visualizer.game.level_tensor_to_strs(
+            torch.flip(state_tensor, [2]))[0])
+        ret.append(visualizer.game.level_tensor_to_strs(
+            torch.flip(state_tensor, [3]))[0])
+        ret.append(visualizer.game.level_tensor_to_strs(
+            torch.flip(state_tensor, [2, 3]))[0])
+    return ret
+
+
 def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True, dataset_size=None):
     np.random.seed(seed)
     if game.name == 'mario':
@@ -119,6 +134,9 @@ def prepare_dataset(game: Game, seed=0, extend_data=True, flip=True, dataset_siz
 
     if dataset_size:
         lvl_strs = lvl_strs[:dataset_size]
+
+    if flip:
+        lvl_strs = flip_levels(lvl_strs, visualizer)
 
     for j in range(len(lvl_strs)):
         index = j % len(lvl_strs)

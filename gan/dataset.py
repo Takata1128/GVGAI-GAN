@@ -45,6 +45,8 @@ class LevelDataset(Dataset):
             with open(path, 'r') as f:
                 level = f.read()
             features = self.game.get_features(level)
+            # !!!fixed!!!
+            features = features + (len(self.data) + 1,)
             level_tensor, label_tensor = self.game.level_str_to_tensor(level)
             item = LevelItem(level_tensor, label_tensor, level, features)
             if features in self.feature2indices:
