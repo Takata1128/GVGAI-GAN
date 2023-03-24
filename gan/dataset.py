@@ -20,17 +20,14 @@ class LevelItem:
 
 
 class LevelDataset(Dataset):
-    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32, use_diversity_sampling=False, initial_data_prob=0.0, initial_data_sampling_steps=None, seed=0):
+    def __init__(self, dataset_dir: str, game: Game, latent_size: int = 32, diversity_sampling_mode: str = 'legacy', initial_data_featuring=False, seed=0):
         random.seed(seed)
         np.random.seed(seed)
         self.game = game
         self.level_dir = dataset_dir
         self.latent_size = latent_size
-        self.use_diversity_sampling = use_diversity_sampling
-        self.initial_dataset_size = 0
-        self.select_initial_data_prob = initial_data_prob
-        self.data_noise_coef = 0.00
-        self.initial_data_sampling_steps = initial_data_sampling_steps
+        self.diversity_sampling_mode = diversity_sampling_mode
+        self.initial_data_featuring = initial_data_featuring
         self.initialize()
 
     def initialize(self):
@@ -40,19 +37,33 @@ class LevelDataset(Dataset):
         self.level_paths = [os.path.join(
             self.level_dir, name) for name in os.listdir(self.level_dir)]
         self.data_length = len(self.level_paths)
-        self.initial_dataset_size = self.data_length
+        self.feature_search_dicts = []
         for path in self.level_paths:
             with open(path, 'r') as f:
                 level = f.read()
             features = self.game.get_features(level)
-            # !!!fixed!!!
-            features = features + (len(self.data) + 1,)
+
+            # 初期ステージを重視（特徴量にindexを加える）
+            if self.initial_data_featuring:
+                features = features + (len(self.data) + 1,)
             level_tensor, label_tensor = self.game.level_str_to_tensor(level)
             item = LevelItem(level_tensor, label_tensor, level, features)
+
+            # 特徴量とステージをマッピング
             if features in self.feature2indices:
                 self.feature2indices[features].append(len(self.data))
             else:
                 self.feature2indices[features] = [len(self.data)]
+
+            ### proposal 特徴量を単純にランダムに選ぶのではなく、あるひとつに着目してランダムに選ぶ ###
+            if self.feature_search_dicts == []:
+                for _ in range(len(features)):
+                    self.feature_search_dicts.append(dict())
+            for i in range(len(features)):
+                if features[i] in self.feature_search_dicts[i]:
+                    self.feature_search_dicts[i][features[i]].add(features)
+                else:
+                    self.feature_search_dicts[i][features[i]] = {features}
             self.data.append(item)
 
         print('### Properties ###')
@@ -68,8 +79,29 @@ class LevelDataset(Dataset):
             self.feature2indices[features].append(index)
         else:
             self.feature2indices[features] = [index]
+        for i in range(len(features)):
+            if features[i] in self.feature_search_dicts[i]:
+                self.feature_search_dicts[i][features[i]].add(features)
+            else:
+                self.feature_search_dicts[i][features[i]] = {features}
         self.data.append(item)
         self.data_length = len(self.data)
+
+    def diversity_sampling(self, step):
+        feature_index = np.random.choice(len(self.feature2indices))
+        level_index = np.random.choice(self.feature2indices[list(
+            self.feature2indices.keys())[feature_index]])
+        item = self.data[level_index]
+        return item
+
+    def proposal_diversity_sampling(self, step):
+        dict_index = np.random.choice(len(self.feature_search_dicts))
+        features_set = random.choice(
+            list(self.feature_search_dicts[dict_index].values()))
+        feature = random.choice(list(features_set))
+        level_index = np.random.choice(self.feature2indices[feature])
+        item = self.data[level_index]
+        return item
 
     def sample(self, batch_size: int, step=None):
         latent_batch = torch.zeros((batch_size, self.latent_size))
@@ -77,38 +109,13 @@ class LevelDataset(Dataset):
         label_batch = torch.zeros((batch_size, self.game.input_shape[0]))
         # batch_features = {}
         for index in range(batch_size):
-            if self.use_diversity_sampling:
-                key_index = np.random.choice(len(self.feature2indices))
-                idx = np.random.choice(self.feature2indices[list(
-                    self.feature2indices.keys())[key_index]])
-                # 初期データの割合が低くなり始めたら初期データ選択確率を保証
-                if self.select_initial_data_prob and self.initial_dataset_size / self.data_length < self.select_initial_data_prob:
-                    if step and self.initial_data_sampling_steps and step > self.initial_data_sampling_steps:
-                        # 規定のステップ数を超えたらランダム選択
-                        item = np.random.choice(self.data)
-                    else:
-                        if np.random.random() < self.select_initial_data_prob:
-                            idx = np.random.randint(
-                                self.initial_dataset_size)  # 初期データセットの中からランダム選択
-                            item = self.data[idx]
-                        else:
-                            item = np.random.choice(self.data)
-                else:
-                    item = np.random.choice(self.data)
-                item = self.data[idx]
-                # if item.features in batch_features:
-                #     batch_features[item.features] += 1
-                # else:
-                #     batch_features[item.features] = 0
+            if self.diversity_sampling_mode == 'legacy':
+                item = self.diversity_sampling(step)
+            elif self.diversity_sampling_mode == 'proposal':
+                item = self.proposal_diversity_sampling(step)
             else:
                 item = np.random.choice(self.data)
-
             latent_batch[index] = torch.randn(self.latent_size)
             level_batch[index] = item.data
             label_batch[index] = item.label
-        # for key, value in batch_features.items():
-        #     print(f'{key} : {value}', end=', ')
-        # print()
-        noise = torch.rand_like(level_batch)
-        level_batch = level_batch + self.data_noise_coef * noise
         return latent_batch, level_batch, label_batch

@@ -236,7 +236,7 @@ class Discriminator(nn.Module):
         else:
             raise NotImplementedError()
 
-    def _init_weights(self, module):
+    def init_weights(self, module):
         if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
             nn.init.kaiming_normal_(
                 module.weight, mode="fan_out", nonlinearity="leaky_relu")
@@ -336,7 +336,7 @@ class Generator(nn.Module):
         self.mods = nn.ModuleList(self.mods)
         # self.apply(self._init_weights)
 
-    def _init_weights(self, module):
+    def init_weights(self, module):
         if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
             nn.init.kaiming_normal_(
                 module.weight, mode="fan_out", nonlinearity="relu")

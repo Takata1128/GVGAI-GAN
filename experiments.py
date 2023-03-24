@@ -49,32 +49,38 @@ class Experiments():
         return metrics
 
 
-def report(results: list, legends=[], name: str = None):
+def report(results: list, graph_legends=[], name: str = None):
     '''
     results -
-        Final Playable Rate
-        Final Duplication Rate
-        Similarity Rate
-        Features Type Nums
-        Features Duplication Rate    
+        Final Playable Rate,   
+        Hamming Distance,
+        Final Duplication Rate,
+        Features Duplication Rate,
+        Features Type Nums,
     '''
     with open(os.path.join(RESULT_PATH, name), 'w') as f:
-        legend_str = ''
-        for key, item in results[0]['wandb'].items():
-            legend_str += str(key)
-            legend_str += ','
+        legend_str = 'Final Playable Rate,Hamming Distance,Final Duplication Rate,Features Duplication Rate,Features Type Nums'
+        # legend_str = ''
+        # for key, item in results[0]['wandb'].items():
+        #     legend_str += str(key)
+        #     legend_str += ','
         f.write(legend_str + '\n')
     plt.clf()
     with open(os.path.join(RESULT_PATH, name), 'a') as f:
+        splited_legends = legend_str.split(',')
         for i, res in enumerate(results):
             data_str = ''
-            for key, item in res['wandb'].items():
-                data_str += str(item)
+            for legend in splited_legends:
+                if legend in res['wandb']:
+                    data_str += '{:.4f}'.format(res['wandb'][legend])
                 data_str += ','
+            # for key, item in res['wandb'].items():
+            #     data_str += str(item)
+            #     data_str += ','
             if 'other' in res and r'X% Duplication Rate' in res['other']:
                 x, y = res['other'][r'X% Duplication Rate']
-                plt.plot(x, y, label=legends[i]
-                         if i < len(legends) else str(i))
+                plt.plot(x, y, label=graph_legends[i]
+                         if i < len(graph_legends) else str(i))
             f.write(data_str + '\n')
     plt.legend()
     plt.savefig(os.path.join(RESULT_PATH, name) + '_dpl.png', format='png')
@@ -106,103 +112,145 @@ def get_models(game: Game, config: cfg.BaseConfig):
 
 
 if __name__ == "__main__":
-    # zelda_exp = Experiments(Zelda('v1'))
-    # config = cfg.ZeldaConfig()
-    # config.flip_data = True
-    # config.bootstrap_hamming_filter = 0.90
-    # results = []
-
-    # config.bootstrap = None
-    # config.div_loss = None
-    # config.use_diversity_sampling = False
-    # result = zelda_exp.run(config, 3)
-    # results.append(result)
-
-    # config.bootstrap = 'baseline'
-    # config.div_loss = None
-    # config.use_diversity_sampling = False
-    # result = zelda_exp.run(config, 3)
-    # results.append(result)
-
-    # config.bootstrap = 'baseline'
-    # config.div_loss = None
-    # config.use_diversity_sampling = True
-    # result = zelda_exp.run(config, 3)
-    # results.append(result)
-
-    # config.bootstrap = 'smart'
-    # config.div_loss = None
-    # config.use_diversity_sampling = True
-    # result = zelda_exp.run(config, 3)
-    # results.append(result)
-
-    # report(results, ['simple', 'bootstrapping',
-    #        'diversity sampling', 'ours'], 'zelda_large')
-
-    # boulderdash_exp = Experiments(Boulderdash())
-    # config = cfg.BoulderdashConfig()
-    # config.flip_data = True
-    # config.bootstrap_hamming_filter = 0.85
-
-    # results = []
-
-    # config.bootstrap = None
-    # config.div_loss = None
-    # config.use_diversity_sampling = False
-    # result = boulderdash_exp.run(config, 3)
-    # results.append(result)
-
-    # config.bootstrap = 'baseline'
-    # config.div_loss = None
-    # config.use_diversity_sampling = False
-    # result = boulderdash_exp.run(config, 3)
-    # results.append(result)
-
-    # config.bootstrap = 'baseline'
-    # config.div_loss = None
-    # config.use_diversity_sampling = True
-    # result = boulderdash_exp.run(config, 3)
-    # results.append(result)
-
-    # config.bootstrap = 'smart'
-    # config.div_loss = None
-    # config.use_diversity_sampling = True
-    # result = boulderdash_exp.run(config, 3)
-    # results.append(result)
-
-    # report(results, ['simple', 'bootstrapping',
-    #        'diversity sampling', 'ours'], 'boulderdash_large')
-
-    mario_exp = Experiments(Mario())
-    config = cfg.MarioConfig()
+    exp = Experiments(Zelda('v1'))
+    config = cfg.ZeldaConfig()
+    config.bootstrap_hamming_filter = 0.925
     results = []
 
     # config.bootstrap = None
     # config.div_loss = None
-    # config.use_diversity_sampling = False
     # result = mario_exp.run(config, 3)
     # results.append(result)
 
     # config.bootstrap = 'baseline'
     # config.div_loss = None
-    # config.use_diversity_sampling = False
-    # result = mario_exp.run(config, 3)
+    # config.diversity_sampling_mode = None
+    # result = mario_exp.run(config, 1)
     # results.append(result)
 
-    config.bootstrap = 'baseline'
-    config.div_loss = None
-    config.use_diversity_sampling = True
-    result = mario_exp.run(config, 3)
+    config.bootstrapping_mode = 'baseline'
+    config.diversity_sampling_mode = 'legacy'
+    result = exp.run(config, 3)
     results.append(result)
 
-    config.bootstrap = 'smart'
-    config.div_loss = None
-    config.use_diversity_sampling = True
-    result = mario_exp.run(config, 3)
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'legacy'
+    config.select_newlevels_mode = 'diversity'
+    result = exp.run(config, 3)
     results.append(result)
 
-    report(results, ['simple', 'bootstrapping',
-           'diversity sampling', 'ours'], 'mario_large')
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'proposal'
+    config.select_newlevels_mode = 'diversity'
+    result = exp.run(config, 3)
+    results.append(result)
+
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'proposal'
+    config.select_newlevels_mode = 'diversity'
+    config.div_loss = 'l1-latent'
+    config.lambda_div = 0.01
+    result = exp.run(config, 3)
+    results.append(result)
+
+    # report(results, ['diversity sampling',
+    #                  'ours(fb)', 'ours(fb+sds)'], 'zelda')
+
+    report(results, ['existing',
+           'ours(fb)', 'ours(fb+sds)', 'ours(fb+sds+msr)'], 'zelda')
+
+    exp = Experiments(Boulderdash())
+    config = cfg.BoulderdashConfig()
+    config.bootstrap_hamming_filter = 0.85
+    results = []
+
+    # config.bootstrap = None
+    # config.div_loss = None
+    # result = mario_exp.run(config, 1)
+    # results.append(result)
+
+    # config.bootstrap = 'baseline'
+    # config.div_loss = None
+    # config.diversity_sampling_mode = None
+    # result = mario_exp.run(config, 1)
+    # results.append(result)
+
+    config.bootstrapping_mode = 'baseline'
+    config.diversity_sampling_mode = 'legacy'
+    result = exp.run(config, 3)
+    results.append(result)
+
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'legacy'
+    config.select_newlevels_mode = 'diversity'
+    result = exp.run(config, 3)
+    results.append(result)
+
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'proposal'
+    config.select_newlevels_mode = 'diversity'
+    result = exp.run(config, 3)
+    results.append(result)
+
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'proposal'
+    config.select_newlevels_mode = 'diversity'
+    config.div_loss = 'l1-latent'
+    config.lambda_div = 0.05
+    result = exp.run(config, 3)
+    results.append(result)
+
+    # report(results, ['diversity sampling',
+    #        'ours(fb)', 'ours(fb+sds)'], 'boulderdash')
+    report(results, ['existing',
+                     'ours(fb)', 'ours(fb+sds)', 'ours(fb+sds+msr)'], 'boulderdash')
+
+    exp = Experiments(Mario())
+    config = cfg.MarioConfig()
+    config.bootstrap_hamming_filter = 0.95
+    results = []
+
+    # config.bootstrap = None
+    # config.div_loss = None
+    # result = mario_exp.run(config, 1)
+    # results.append(result)
+
+    # config.bootstrap = 'baseline'
+    # config.div_loss = None
+    # config.diversity_sampling_mode = None
+    # result = mario_exp.run(config, 1)
+    # results.append(result)
+
+    config.bootstrapping_mode = 'baseline'
+    config.diversity_sampling_mode = 'legacy'
+    result = exp.run(config, 3)
+    results.append(result)
+
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'legacy'
+    config.select_newlevels_mode = 'diversity'
+    result = exp.run(config, 3)
+    results.append(result)
+
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'proposal'
+    config.select_newlevels_mode = 'diversity'
+    result = exp.run(config, 3)
+    results.append(result)
+
+    config.bootstrapping_mode = 'proposal'
+    config.diversity_sampling_mode = 'proposal'
+    config.select_newlevels_mode = 'diversity'
+    config.div_loss = 'l1-latent'
+    config.lambda_div = 0.05
+    result = exp.run(config, 3)
+    results.append(result)
+
+    # report(results, ['diversity sampling',
+    #        'ours(fb)', 'ours(fb+sds)'], 'mario')
+
+    report(results, ['existing',
+           'ours(fb)', 'ours(fb+sds)', 'ours(fb+sds+msr)'], 'mario')
 
     # lambdas = [0, 0.05, 0.1, 0.3]
     # lambdas = [0, 0.05, 0.1]
@@ -211,7 +259,7 @@ if __name__ == "__main__":
     # config = cfg.ZeldaConfig()
     # results = []
     # for l in lambdas:
-    #     config.bootstrap = 'smart'
+    #     config.bootstrap = 'proposal'
     #     config.div_loss = 'l1-latent'
     #     config.lambda_div = l
     #     config.use_diversity_sampling = True
@@ -223,7 +271,7 @@ if __name__ == "__main__":
     # config = cfg.BoulderdashConfig()
     # results = []
     # for l in lambdas:
-    #     config.bootstrap = 'smart'
+    #     config.bootstrap = 'proposal'
     #     config.div_loss = 'l1-latent'
     #     config.lambda_div = l
     #     config.use_diversity_sampling = True
@@ -236,7 +284,7 @@ if __name__ == "__main__":
     # config = cfg.MarioConfig()
     # results = []
     # for l in lambdas:
-    #     config.bootstrap = 'smart'
+    #     config.bootstrap = 'proposal'
     #     config.lambda_div = l
     #     config.use_diversity_sampling = True
     #     result = mario_exp.run(config, 1)
@@ -250,7 +298,7 @@ if __name__ == "__main__":
     # config = cfg.ZeldaConfig()
     # results = []
     # for f in filters:
-    #     config.bootstrap = 'smart'
+    #     config.bootstrap = 'proposal'
     #     config.div_loss = None
     #     config.bootstrap_hamming_filter = f
     #     config.use_diversity_sampling = True
@@ -263,7 +311,7 @@ if __name__ == "__main__":
     # config = cfg.BoulderdashConfig()
     # results = []
     # for f in filters:
-    #     config.bootstrap = 'smart'
+    #     config.bootstrap = 'proposal'
     #     config.div_loss = None
     #     config.bootstrap_hamming_filter = f
     #     config.use_diversity_sampling = True
@@ -276,7 +324,7 @@ if __name__ == "__main__":
     # config = cfg.MarioConfig()
     # results = []
     # for f in filters:
-    #     config.bootstrap = 'smart'
+    #     config.bootstrap = 'proposal'
     #     config.div_loss = None
     #     config.bootstrap_hamming_filter = f
     #     config.use_diversity_sampling = True

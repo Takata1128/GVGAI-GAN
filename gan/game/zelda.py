@@ -78,14 +78,20 @@ class Zelda(Game):
 
     def get_features(self, level: str):
         index_agent, index_key, index_goal = 0, 0, 0
+        num_enemy, num_wall = 0, 0
         for i, c in enumerate(level):
+            if c in ['1', '2', '3']:
+                num_enemy += 1
+            if c == 'w':
+                num_wall += 1
             if c == 'A':
                 index_agent = i
             elif c == '+':
                 index_key = i
             elif c == 'g':
                 index_goal = i
-        return (index_agent, index_key, index_goal)
+        # return (index_agent, index_key, index_goal)
+        return (index_agent, index_key, index_goal, num_enemy // 2)
 
     def evaluation(self, playable_levels: list[str]):
         def check_level_hamming(level1: str, level2: str):

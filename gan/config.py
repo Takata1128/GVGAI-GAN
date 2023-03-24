@@ -7,7 +7,7 @@ import os
 @dataclass
 class BaseConfig:
     # training name
-    name: str = "new"
+    name: str = "journal"
 
     # environment name
     env_name: str = "zelda"
@@ -34,9 +34,9 @@ class BaseConfig:
     # use_conditional: bool = False
 
     # learning parameters
-    adv_loss: str = "hinge"  # ["baseline","hinge"]
-    div_loss: str = "l1-latent"  # ["l1","l2","none"]
-    lambda_div: float = 0.1
+    adv_loss: str = "hinge"  # ["baseline","hinge",'wgan']
+    div_loss: str = None  # ["l1","l2",'l1-latent',None]
+    lambda_div: float = 0.0
     use_recon_loss: bool = False
     recon_lambda: float = 1.0
     use_gradient_penalty: bool = False
@@ -48,17 +48,14 @@ class BaseConfig:
     steps: int = 5000  # training steps
 
     # dataset parameters
-    bootstrap: str = "smart"  # ["none", "random", "smart"]
+    bootstrapping_mode: str = None  # [None, "regacy", "proposal"]
     dataset_size: int = 5
     clone_data: bool = False
     flip_data: bool = False
-    initial_data_prob: int = 0
-    initial_data_sampling_steps: int = 5000
-    dataset_max_change_count: int = 5
+    initial_data_featuring: bool = False
     bootstrap_hamming_filter: float = None
-    bootstrap_kmeans_filter: bool = True
-    use_diversity_sampling: bool = True
-    bootstrap_max_count: int = 10
+    select_newlevels_mode: str = 'kmeans'  # ['kmeans','features']
+    diversity_sampling_mode: str = 'legacy'
     eval_playable_counts: int = 128  # number of z to check playable.
     final_evaluation_levels: int = 15000
 
@@ -66,10 +63,11 @@ class BaseConfig:
     seed: int = 0  # random seed
     cuda: bool = True  # use cuda
     gpu_id: int = 3  # gpu index
-    save_model_epoch: int = 10000
-    save_image_epoch: int = 100
-    eval_epoch: int = 100
-    bootstrap_epoch: int = 10
+    save_model_interval: int = 10000
+    save_image_interval: int = 100
+    eval_interval: int = 100
+    bootstrapping_interval: int = 10
+    bootstrapping_steps: int = steps
 
     def set_env(self, game: Game):
         self.env_name = game.name
@@ -101,7 +99,7 @@ class BaseConfig:
 
     def set_augmentation(self):
         self.is_augmentation = True
-        self.bootstrap_epoch = 5
+        self.bootstrapping_interval = 5
         self.steps = 1000000
         self.reset_weight_epoch: int = 1000
         self.reset_weight_bootstrap_count: int = 50

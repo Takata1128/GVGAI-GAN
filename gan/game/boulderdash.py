@@ -14,7 +14,7 @@ class Boulderdash(Game):
     def get_features(self, level_str: str):
         agent_index = -1
         goal_index = -1
-        enemy_num = 0
+        enemy_num, block_num, diamond_num = 0, 0, 0
         for i, c in enumerate(level_str):
             if c == 'A':
                 agent_index = i
@@ -22,8 +22,12 @@ class Boulderdash(Game):
                 goal_index = i
             if c in ['b', 'c']:
                 enemy_num += 1
+            if c == '.':
+                block_num += 1
+            if c == 'x':
+                diamond_num += 1
 
-        return (agent_index, goal_index, enemy_num // 3)
+        return (agent_index, goal_index, enemy_num // 3, diamond_num // 5)
 
     def evaluation(self, playable_levels: list[str]):
         def check_level_hamming(level1: str, level2: str):
@@ -34,19 +38,6 @@ class Boulderdash(Game):
                 if c1 != c2:
                     hit += 1
             return hit
-
-        # def check_level_object_duprecated(level1: str, level2: str):
-        #     g, a, all = 0, 0, 0
-        #     for c1, c2 in zip(level1, level2):
-        #         if c1 == "\n":
-        #             continue
-        #         if c1 == 'e' and c1 == c2:
-        #             g = 1
-        #         if c1 == 'A' and c1 == c2:
-        #             a = 1
-        #     if g and a:
-        #         all = 1
-        #     return g, a, all
 
         levels_small_set = playable_levels[:1000]
         total_hamming_dist, features_duplication, n = 0, 0, 0

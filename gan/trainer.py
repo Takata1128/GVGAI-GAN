@@ -14,7 +14,7 @@ from . import loss
 from .game.env import Game
 from .level_visualizer import GVGAILevelVisualizer, MarioLevelVisualizer
 from .dataset import LevelDataset
-from .level_dataset_extend import prepare_dataset
+from .prepare_dataset import prepare_dataset
 from .config import BaseConfig
 from .utils import (
     kmeans_select,
@@ -53,9 +53,8 @@ class Trainer:
             config.level_data_path,
             self.game,
             latent_size=config.latent_size,
-            use_diversity_sampling=config.use_diversity_sampling,
-            initial_data_prob=config.initial_data_prob,
-            initial_data_sampling_steps=config.initial_data_sampling_steps,
+            diversity_sampling_mode=config.diversity_sampling_mode,
+            initial_data_featuring=config.initial_data_featuring,
             seed=config.seed
         )
 
@@ -103,19 +102,19 @@ class Trainer:
         self.max_playable_count = 0
         self.bootstrap_count = 0
 
-        self.model_save_epoch = config.save_model_epoch
-        self.image_save_epoch = config.save_image_epoch
-        self.eval_epoch = config.eval_epoch
-        self.bootstrap_epoch = config.bootstrap_epoch
+        self.model_save_epoch = config.save_model_interval
+        self.image_save_epoch = config.save_image_interval
+        self.eval_epoch = config.eval_interval
+        self.bootstrapping_interval = config.bootstrapping_interval
         print(f"model_save_epoch:{self.model_save_epoch}")
         print(f"image_save_epoch:{self.image_save_epoch}")
         print(f"eval_epoch:{self.eval_epoch}")
-        print(f"bootstrap_epoch:{self.bootstrap_epoch}")
+        print(f"bootstrap_epoch:{self.bootstrapping_interval}")
 
     def train(self):
         wandb.login()
         metrics = {}
-        with wandb.init(project=f"Experiments of generation of {self.config.env_fullname}", config=self.config.__dict__):
+        with wandb.init(project=f"{self.config.env_fullname}_20230210-", config=self.config.__dict__):
             # check model summary
             self.generator.summary(
                 batch_size=self.config.train_batch_size, device=self.device)
@@ -156,7 +155,6 @@ class Trainer:
                     Dx, DGz_d, discriminator_loss, recon_loss, gradient_penalty = self._discriminator_update(
                         real, fake_images, label
                     )
-
                 ### Generator Update ###
                 generator_loss, div_loss = self._generator_update(
                     latent, fake_images, label, hiddens)
@@ -173,8 +171,7 @@ class Trainer:
                 if self.config.use_gradient_penalty:
                     metrics["Gradient Penalty"] = gradient_penalty
                 wandb.log(metrics, step=self.step)
-                if not self.after_step(real, label):
-                    break
+                self.after_step(real, label)
             evaluation_result = self._evaluation()
             self._save_models(self.model_save_path, None, None)
             return evaluation_result
@@ -182,51 +179,41 @@ class Trainer:
     def after_step(self, real_images: torch.Tensor, labels: torch.Tensor):
         self.generator.eval()
         with torch.no_grad():
-            if self.step % self.image_save_epoch == 0:
-                self._save_images()
-                if self.config.use_recon_loss:
-                    self._save_recon_images(real_images, labels)
-
-            if self.step % self.eval_epoch == 0 or (self.config.bootstrap and self.step % self.bootstrap_epoch == 0):
+            # bootstrapping
+            if self.config.bootstrapping_mode and self.step % self.bootstrapping_interval == 0:
                 # generate levels
-                latents, _, labels = self.dataset.sample(
+                playable_levels = self._generate_playable_levels(
                     self.config.eval_playable_counts)
-                latents = latents.to(self.device).float()
-                labels = labels.to(self.device).int()
-                levels = self._generate_levels(latents, labels)
-                playable_levels = []
-                for level_str in levels:
-                    if self.game.check_playable(level_str):
-                        playable_levels.append(level_str)
-                wandb.log(
-                    {
-                        "Playable Rate": len(playable_levels)
-                        / self.config.eval_playable_counts
-                    }, step=self.step
-                )
-                # eval
-                if self.step % self.eval_epoch == 0:
-                    self._eval_models(levels, playable_levels)
-                # save model
-                if self.step % self.model_save_epoch == 0:
-                    self._save_models(
-                        self.model_save_path, self.step, None)
-                # bootstrap
+                # bootstrapping
                 unique_playable_levels = list(set(playable_levels))
-                if self.step % self.bootstrap_epoch == 0 and self.config.bootstrap is not None and len(unique_playable_levels) > 1:
-                    unique_playable_levels = self._bootstrap(
-                        unique_playable_levels)
+                if self.step < self.config.bootstrapping_steps:
+                    self._bootstrapping(unique_playable_levels)
+                wandb.log({"Playability": len(playable_levels) /
+                           self.config.eval_playable_counts}, self.step)
+
+            # evaluate model
+            if self.step % self.eval_epoch == 0:
+                # generate levels
+                playable_levels = self._generate_playable_levels(
+                    self.config.eval_playable_counts)
+                if len(playable_levels) > 1:
+                    self._eval_models(playable_levels, real_images, labels)
+
+            # save model
+            if self.step % self.model_save_epoch == 0:
+                self._save_models(
+                    self.model_save_path, self.step, None)
         return True
 
     def _reset_model(self):
-        self.generator = Generator(
-            isize=self.game.input_shape[1], nz=self.config.latent_size, nc=self.game.input_shape[
-                0], ngf=self.config.generator_filters, self_attention=self.config.use_self_attention_g, n_extra_layers=self.config.extra_layers_g
-        ).to(self.device)
-        self.discriminator = Discriminator(
-            isize=self.game.input_shape[1], nz=self.config.latent_size, nc=self.game.input_shape[
-                0], ndf=self.config.discriminator_filters, use_self_attention=self.config.use_self_attention_d, use_spectral_norm=self.config.use_spectral_norm_d, normalization=self.config.normalization_d, use_recon_loss=self.config.use_recon_loss, n_extra_layers=self.config.extra_layers_d
-        ).to(self.device)
+        self.generator.init_weights()
+        self.discriminator.init_weights()
+
+        # Optimizer
+        # self.optimizer_g = torch.optim.Adam(self.generator.parameters(),
+        #                                     lr=self.config.generator_lr, betas=(0, 0.9))
+        # self.optimizer_d = torch.optim.Adam(self.discriminator.parameters(),
+        #                                     lr=self.config.discriminator_lr, betas=(0, 0.9))
         self.optimizer_g = torch.optim.RMSprop(
             self.generator.parameters(), lr=self.config.generator_lr
         )
@@ -234,7 +221,18 @@ class Trainer:
             self.discriminator.parameters(), lr=self.config.discriminator_lr
         )
 
-    def _generate_levels(self, latents: torch.Tensor, labels: torch.Tensor):
+    def _generate_playable_levels(self, generate_num):
+        latents, _, labels = self.dataset.sample(generate_num)
+        latents = latents.to(self.device).float()
+        labels = labels.to(self.device).int()
+        levels = self._generate_lvl_str(latents, labels)
+        playable_levels = []
+        for level_str in levels:
+            if self.game.check_playable(level_str):
+                playable_levels.append(level_str)
+        return playable_levels
+
+    def _generate_lvl_str(self, latents: torch.Tensor, labels: torch.Tensor):
         level_tensor, _ = self.generator(latents, labels)
         level_strs = self.game.level_tensor_to_strs(
             level_tensor)
@@ -245,10 +243,6 @@ class Trainer:
             self.latents_for_show, self.labels_for_show)
         level_strs = self.game.level_tensor_to_strs(
             level_tensor)
-        # playables = [self.game.check_playable(level) for level in level_strs]
-        # visited_maps = [self.game.check_reachable(
-        #     level.split())[1] for level in level_strs]
-
         p_level_img = [
             torch.tensor(
                 np.array(self.level_visualizer.draw_level(lvl)).transpose(
@@ -307,34 +301,28 @@ class Trainer:
             recon_level_img, caption="reconstructed levels")
         wandb.log({"Reconstructed Levels": images}, self.step)
 
-    def _eval_models(self, level_strs: list[str], playable_levels: list[str]):
-        (
-            level_similarity,
-            duplication_rate,
-        ) = self._calc_level_similarity(level_strs)
-
+    def _eval_models(self, playable_levels: list[str], real_images: torch.Tensor, labels: torch.Tensor):
+        level_similarity = self._calc_level_similarity(playable_levels)
         wandb.log({"Level Similarity Rate": level_similarity}, self.step)
-        wandb.log({"Duplication Rate": duplication_rate}, self.step)
+        wandb.log({"Dataset Size": len(self.dataset_files)}, self.step)
+        wandb.log({"Playability": len(playable_levels) /
+                  self.config.eval_playable_counts}, self.step)
 
+        self._save_images()
+        if self.config.use_recon_loss:
+            self._save_recon_images(real_images, labels)
         if len(playable_levels) > self.max_playable_count:
             self.max_playable_count = len(playable_levels)
             self.playability = self.max_playable_count / self.config.eval_playable_counts
 
     # 生成データによる学習データ拡張
 
-    def _bootstrap(self, unique_playable_levels: list[str]):
-        if self.config.bootstrap == "random":
-            result_levels = unique_playable_levels
-        elif self.config.bootstrap == 'baseline':  # PCA + elbow + kmeansで追加するデータを決定
-            result_levels = kmeans_select(
-                unique_playable_levels, self.config, self.game)
-        elif self.config.bootstrap == "smart":  # データセット内のステージと比較して類似度が低いもののみを追加
-            filtered_levels = []
+    def _bootstrapping(self, unique_playable_levels: list[str]):
+        filtered_levels = []
+        if self.config.bootstrapping_mode == "proposal":  # データセット内のステージと比較して類似度が低いもののみを追加
             for generated_level in unique_playable_levels:
                 dup = False
                 dataset_levels = self.dataset.data
-                # dataset_levels = np.random.choice(self.dataset.data, min(
-                #     len(self.dataset.data), 50), replace=False)
                 for item in dataset_levels:
                     sim = self.game.check_similarity(
                         generated_level, item.representation)
@@ -343,52 +331,31 @@ class Trainer:
                         break
                 if not dup:
                     filtered_levels.append(generated_level)
+            print(
+                f"Unique Playable Levels: {len(unique_playable_levels)}, Filtered by Hamming: {len(filtered_levels)}")
+        else:
+            filtered_levels = unique_playable_levels
 
-            print(f"Filtered by Hamming: {len(filtered_levels)}")
-
-            # # プロパティフィルタ
-            # if self.config.bootstrap_property_filter is not None:
-            #     tmp_levels = []
-            #     for level_str in filtered_levels:
-            #         features = self.game.get_features(level_str)
-            #         ok = True
-            #         for i, pd in enumerate(self.dataset_properties_dicts):
-            #             if (features[i] in pd) and (pd[features[i]] >= self.dataset.data_length * self.config.bootstrap_property_filter):
-            #                 print(
-            #                     f"{pd[features[i]]} >= {self.dataset.data_length * self.config.bootstrap_property_filter}")
-            #                 ok = False
-            #         if ok:
-            #             tmp_levels.append(level_str)
-
-            #     filtered_levels = tmp_levels
-            # else:
-            #     pass
-
-            # K-meansで選択
-            if self.config.bootstrap_kmeans_filter and len(filtered_levels) > 1:
-                result_levels = kmeans_select(
-                    filtered_levels, self.config, self.game)
-            else:
-                result_levels = diversity_select(
-                    filtered_levels, self.config, self.game, self.dataset.feature2indices)
+        # K-meansで選択
+        result_levels = []
+        if self.config.select_newlevels_mode == 'kmeans':
+            result_levels = kmeans_select(
+                filtered_levels, self.config, self.game)
+        elif self.config.select_newlevels_mode == 'diversity':
+            result_levels = diversity_select(
+                filtered_levels, self.config, self.game, self.dataset.feature2indices)
         else:
             raise NotImplementedError(
-                f'{self.config.bootstrap} bootstrap is not implemented!!')
-
-        print("Property : ")
-        for feature, v in self.dataset.feature2indices.items():
-            print(f"{feature}={len(v)} , ", end="")
-        print()
-
-        # 多すぎないように
-        selected = random.sample(
-            result_levels, min(len(result_levels), self.config.bootstrap_max_count))
-        for level in selected:
+                f'select_newlevels_mode "{self.config.select_newlevels_mode}" is not implemented !!')
+        # update dataset
+        for level in result_levels:
             self._level_add(level)
             self.bootstrap_count += 1
         wandb.log({"Dataset Size": len(self.dataset_files)}, self.step)
-        # Update dataset
-        return selected
+
+        print(
+            f"steps : {self.step}, dataset size : {len(self.dataset_files)}, feature counts : {len(self.dataset.feature2indices)}")
+        return result_levels
 
     def _level_add(self, level_str: str):
         index = len(self.dataset_files)
@@ -411,12 +378,6 @@ class Trainer:
         """
         update discriminator: maximize log(D(x)) + log(1-D(G(z)))
         """
-        def mix(real, fake):
-            for i in range(real.size(0)):
-                if np.random.random() < 0.05:
-                    real[i, :] = fake[i, :]
-            return real.detach()
-
         self.discriminator.zero_grad()
         if self.config.use_recon_loss:
             real_logits, real_recon = self.discriminator(
@@ -524,39 +485,24 @@ class Trainer:
         )
 
     def _calc_level_similarity(self, level_strs: list[str]):
-        res_level, res_duplicate, n_level = 0, 0, 0
+        res_level, n_level = 0, 0
         for i in range(0, len(level_strs)):
             for j in range(i + 1, len(level_strs)):
                 sim = self.game.check_similarity(
                     level_strs[i], level_strs[j])
                 res_level += sim
-                res_duplicate += (
-                    1
-                    if sim >= 0.90
-                    else 0
-                )
                 n_level += 1
-        return (
-            res_level / n_level,
-            res_duplicate / n_level,
-        )
+        return res_level / n_level
 
     def _evaluation(self):
         playable_levels = []
         for i in range(100):
-            latents_for_eval, _, labels_for_eval = self.dataset.sample(5000)
-            latents_for_eval, labels_for_eval = latents_for_eval.to(
-                self.device).float(), labels_for_eval.to(self.device).int()
-            output_levels, _ = self.generator(
-                latents_for_eval, labels_for_eval)
-            level_strs = self.game.level_tensor_to_strs(output_levels)
-            for level_str in level_strs:
-                if self.game.check_playable(level_str):
-                    playable_levels.append(level_str)
-                    if len(playable_levels) == self.config.final_evaluation_levels:
-                        break
+            tmp_playable_levels = self._generate_playable_levels(5000)
+            playable_levels += tmp_playable_levels
             print(len(playable_levels))
-            if len(playable_levels) == self.config.final_evaluation_levels:
+            if len(playable_levels) >= self.config.final_evaluation_levels:
+                playable_levels = playable_levels[:
+                                                  self.config.final_evaluation_levels]
                 break
 
         if len(playable_levels) == self.config.final_evaluation_levels:
@@ -565,20 +511,16 @@ class Trainer:
             metrics = {}
             metrics['wandb'] = {}
 
-        playable_levels = []
-        latents_for_eval, _, labels_for_eval = self.dataset.sample(
+        playable_levels = self._generate_playable_levels(
             self.config.final_evaluation_levels)
-        latents_for_eval, labels_for_eval = latents_for_eval.to(
-            self.device).float(), labels_for_eval.to(self.device).int()
-        output_levels, _ = self.generator(latents_for_eval, labels_for_eval)
-        level_strs = self.game.level_tensor_to_strs(output_levels)
-        for level_str in level_strs:
-            if self.game.check_playable(level_str):
-                playable_levels.append(level_str)
         metrics['wandb']["Final Playable Rate"] = len(
             playable_levels) / self.config.final_evaluation_levels
         print("Playable Rate:", len(playable_levels) /
               self.config.final_evaluation_levels)
+        print("Features count : ")
+        for i, d in enumerate(self.dataset.feature_search_dicts):
+            print(f"{i}={len(d)} , ", end="")
+        print()
         wandb.log(metrics['wandb'])
         return metrics
 

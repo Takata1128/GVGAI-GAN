@@ -8,10 +8,9 @@ import numpy as np
 import os
 
 GameDescription = {}
-GameDescription["aliens"] = {
+GameDescription["aliens_v0"] = {
     "ascii": [".", "0", "1", "2", "A"],
-    "state_shape": (5, 12, 32),
-    "model_shape": [(3, 4), (6, 8), (12, 16), (12, 32)],
+    "state_shape": (5, 32, 32),
 }
 GameDescription["zelda_v1"] = {
     "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
@@ -27,7 +26,6 @@ GameDescription["zelda_v1"] = {
     },
     "state_shape": (8, 16, 16),
     "map_shape": (12, 16),
-    "model_shape": [(3, 4), (6, 8), (12, 16)],
 }
 GameDescription["zelda_v0"] = {
     "ascii": [".", "w", "g", "+", "1", "2", "3", "A"],
@@ -43,7 +41,6 @@ GameDescription["zelda_v0"] = {
     },
     "state_shape": (8, 16, 16),
     "map_shape": (9, 13),
-    "model_shape": [(3, 4), (6, 8), (12, 16)],
 }
 
 GameDescription["roguelike_v0"] = {

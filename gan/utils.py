@@ -20,6 +20,9 @@ def diversity_select(unique_playable_levels: list[str], config: BaseConfig, env:
 
 
 def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: Game):
+    if len(unique_playable_levels) <= 1:
+        return unique_playable_levels
+
     def level_str_to_features(level_str):
         level_str = level_str.split()
         ret = np.zeros((len(level_str), len(level_str[0])))
@@ -32,7 +35,7 @@ def kmeans_select(unique_playable_levels: list[str], config: BaseConfig, env: Ga
         prev_sse = -1
         now_max = 0
         elbow = 1
-        for n_cluster in range(1, min(config.bootstrap_max_count, len(levels_reduced))):
+        for n_cluster in range(1, min(len(levels_reduced), 5)):
             kmeans = KMeans(n_clusters=n_cluster, random_state=0)
             kmeans.fit(levels_reduced)
             sse = kmeans.inertia_

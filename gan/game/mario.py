@@ -54,7 +54,7 @@ class Mario(Game):
             current_x, current_y = que.popleft()
             for dx, dy in dir:
                 nx, ny = current_x + dx, current_y + dy
-                if not (0 <= nx < self.height and 0 <= ny < self.width) or (g[nx][ny] not in ['-', 'E']):
+                if not (0 <= nx < self.height and 0 <= ny < self.width) or (g[nx][ny] not in ['X', 'S', 'Q', '<', '>']):
                     continue
                 if filled[nx][ny] == 0:
                     filled[nx][ny] = 1
@@ -76,18 +76,11 @@ class Mario(Game):
         for i, row in enumerate(g[:self.height]):
             for j, c in enumerate(row[:self.width]):
                 if c == 'X':
-                    # is_connected = False
                     if i != self.height - 1 and (g[i + 1][j] != 'X'):
                         ok = False
-                        # is_connected = True
-                    # if not is_connected and i != 0 and (g[i - 1][j] == 'X'):
-                    #     is_connected = True
-                    # if not is_connected and j != self.width - 1 and (g[i][j + 1] == 'X'):
-                    #     is_connected = True
-                    # if not is_connected and j != 0 and (g[i][j - 1] == 'X'):
-                    #     is_connected = True
-                    # if not is_connected:
-                    #     ok = False
+                if c == 'E':
+                    if i != self.height - 1 and (g[i + 1][j] not in ['X', '']):
+                        ok = False
                 if c == '<':
                     if j != self.width - 1 and g[i][j + 1] != '>':
                         ok = False
@@ -151,7 +144,7 @@ class Mario(Game):
         # スタート地点　横幅4マス分をチェック　最も低い位置をスタート地点
         for x in range(0, 4):
             for y in range(self.height - 2, 0, -1):
-                if g[y][x] in ['-', 'E'] and g[y + 1][x] in ['X', 'S', 'Q', '<', '>', '?']:
+                if g[y][x] in ['-', 'E'] and g[y + 1][x] in ['X', 'S', 'Q', '<', '>']:
                     visited[y][x] = 1
                     que.append((y, x))
                     break
@@ -162,7 +155,7 @@ class Mario(Game):
                 for target_y in range(max(current_y - 4, 0), self.height - 1):
                     if (current_y, current_x) == (target_y, target_x):
                         continue
-                    if g[target_y][target_x] in ['-', 'E'] and g[target_y + 1][target_x] in ['X', 'S', 'Q', '?', '<', '>']:  # 上に乗れるマス
+                    if g[target_y][target_x] in ['-', 'E'] and g[target_y + 1][target_x] in ['X', 'S', 'Q', '<', '>']:  # 上に乗れるマス
                         if visited[target_y][target_x] == 1:
                             continue
                         ### 障害物はない？ ###
@@ -171,18 +164,18 @@ class Mario(Game):
                         if target_y < current_y:  # 高い
                             # まずは上方向
                             while yy != target_y:
-                                if g[yy][current_x] in ['X', 'S', 'Q', '<', '>', '[', ']', '?']:
+                                if g[yy][current_x] in ['X', 'S', 'Q', '<', '>', '[', ']']:
                                     is_obs = True
                                 yy -= 1
                             # 横方向
                             if target_x < current_x:  # 手前
                                 while xx != target_x:
-                                    if g[yy][xx] in ['X', 'S', 'Q', '<', '>', '[', ']', '?']:
+                                    if g[yy][xx] in ['X', 'S', 'Q', '<', '>', '[', ']']:
                                         is_obs = True
                                     xx -= 1
                             else:  # 奥
                                 while xx != target_x:
-                                    if g[yy][xx] in ['X', 'S', 'Q', '<', '>', '[', ']', '?']:
+                                    if g[yy][xx] in ['X', 'S', 'Q', '<', '>', '[', ']']:
                                         is_obs = True
                                     xx += 1
                         elif target_y == current_y:  # 同じ
@@ -259,7 +252,7 @@ class Mario(Game):
                 if g[i][j] == 'E':
                     num_enemy += 1
         # return (num_pipe, min(3, num_hole // 2), min(3, num_enemy // 3))
-        return (num_pipe, num_hole // 3, num_enemy // 3)
+        return (num_pipe, min(3, num_hole // 3), min(3, num_enemy // 3), min(8, num_rock // 10))
 
         # return (num_pipe, min(3, num_hole // 2), min(3, num_enemy // 3), num_rock // 10)
 
